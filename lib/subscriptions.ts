@@ -46,3 +46,25 @@ export function totals(subscriptions: Subscription[]): { perMonth: number; perYe
     perYear: active.reduce((sum, s) => sum + yearlyEquivalent(s.amount, s.cycle), 0),
   };
 }
+
+/** "شهري", "سنوي", "كل 3 أشهر", "كل سنتين" ... */
+export function cycleLabel(cycle: Cycle): string {
+  const n = cycle.count;
+  if (cycle.unit === "month") {
+    if (n === 1) return "شهري";
+    if (n === 2) return "كل شهرين";
+    return n <= 10 ? `كل ${n} أشهر` : `كل ${n} شهرًا`;
+  }
+  if (n === 1) return "سنوي";
+  if (n === 2) return "كل سنتين";
+  return n <= 10 ? `كل ${n} سنوات` : `كل ${n} سنة`;
+}
+
+/** Days left until a payment: "اليوم", "بعد 4 أيام", "متأخر 2 يوم". Negative = overdue. */
+export function dueLabel(daysLeft: number): string {
+  if (daysLeft === 0) return "اليوم";
+  if (daysLeft < 0) return `متأخر ${-daysLeft} يوم`;
+  if (daysLeft === 1) return "بعد يوم";
+  if (daysLeft === 2) return "بعد يومين";
+  return daysLeft <= 10 ? `بعد ${daysLeft} أيام` : `بعد ${daysLeft} يومًا`;
+}

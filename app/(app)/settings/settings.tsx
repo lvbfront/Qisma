@@ -85,6 +85,7 @@ export function Settings({ initial }: { initial: SettingsData }) {
         buckets={data.buckets}
         setBuckets={(buckets) => setData((d) => ({ ...d, buckets }))}
         accounts={data.accounts}
+        subscriptions={data.subscriptions}
         referenceIncome={referenceIncome}
         livingFloor={livingFloor}
         supabase={supabase}

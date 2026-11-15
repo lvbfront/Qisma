@@ -7,7 +7,8 @@ import { SortableList } from "@/components/sortable";
 import { bucketBg } from "@/components/bucket-color";
 import { amountToPercent, percentToAmount, type RuleKind } from "@/lib/allocate";
 import { formatAmount, formatNumber, formatPercent, parseAmount } from "@/lib/money";
-import { previewSplit, ui, type Account, type Bucket } from "./data";
+import { monthlyEquivalent } from "@/lib/subscriptions";
+import { previewSplit, ui, type Account, type Bucket, type LinkedSubscription } from "./data";
 import { Preview } from "./preview";
 import { useWrites } from "./use-writes";
 
@@ -67,6 +68,7 @@ export function Buckets({
   buckets,
   setBuckets,
   accounts,
+  subscriptions,
   referenceIncome,
   livingFloor,
   supabase,
@@ -75,6 +77,7 @@ export function Buckets({
   buckets: Bucket[];
   setBuckets: (buckets: Bucket[]) => void;
   accounts: Account[];
+  subscriptions: LinkedSubscription[];
   referenceIncome: number;
   livingFloor: number;
   supabase: () => SupabaseClient;
@@ -215,6 +218,9 @@ export function Buckets({
             setDraft={setDraft}
             buckets={buckets}
             accounts={accounts}
+            subscriptionsMonthly={subscriptions
+              .filter((s) => s.bucket_id === draft.id && !s.paused)
+              .reduce((sum, s) => sum + monthlyEquivalent(s.amount, { count: s.cycle_count, unit: s.cycle_unit }), 0)}
             referenceIncome={referenceIncome}
             livingFloor={livingFloor}
             busy={busy}
@@ -252,6 +258,7 @@ function Editor({
   setDraft,
   buckets,
   accounts,
+  subscriptionsMonthly,
   referenceIncome,
   livingFloor,
   busy,
@@ -263,6 +270,8 @@ function Editor({
   setDraft: (d: Draft) => void;
   buckets: Bucket[];
   accounts: Account[];
+  /** Monthly cost (halalas) of the active subscriptions paid from this bucket. */
+  subscriptionsMonthly: number;
   referenceIncome: number;
   livingFloor: number;
   busy: boolean;
@@ -394,6 +403,22 @@ function Editor({
       <p id="rule-conversion" aria-live="polite" className={`amount -mt-2 min-h-5 text-label ${value === null ? "text-danger" : "text-muted"}`}>
         {conversion ?? (draft.rule_kind === "percent" ? "أدخل نسبة بين 0 و 100." : "أدخل مبلغًا صحيحًا.")}
       </p>
+      {draft.rule_kind === "fixed" && value !== null && subscriptionsMonthly > value && (
+        <div className="-mt-1 rounded-control border border-hairline bg-bg p-3 text-label">
+          <p className="amount">
+            اشتراكات هذا البند تكلّف {formatAmount(subscriptionsMonthly)} شهريًا، أي أكثر من قيمته بـ{" "}
+            {formatAmount(subscriptionsMonthly - value)}.
+          </p>
+          <button
+            type="button"
+            // Rounded up to a whole riyal so twelve months always cover a yearly subscription.
+            onClick={() => setDraft({ ...draft, value: formatNumber(Math.ceil(subscriptionsMonthly / 100) * 100) })}
+            className="amount mt-1 py-1 font-semibold text-accent"
+          >
+            تحديث إلى {formatAmount(Math.ceil(subscriptionsMonthly / 100) * 100)}
+          </button>
+        </div>
+      )}
       {otherRemainder && (
         <p className="-mt-2 text-label text-muted">
           «{otherRemainder.name}» هو الباقي حاليًا. عند الحفظ سيصبح مبلغًا ثابتًا بلا قيمة.

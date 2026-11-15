@@ -3,12 +3,14 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { bucketBg } from "@/components/bucket-color";
 import { SplitBar } from "@/components/split-bar";
-import { formatDate } from "@/lib/dates";
+import { addDays, daysBetween, formatDate } from "@/lib/dates";
 import { formatAmount } from "@/lib/money";
+import { dueLabel } from "@/lib/subscriptions";
 import { createClient } from "@/utils/supabase/server";
 import { loadPending } from "./distribute/data";
 import { snapshotRows, snapshotSegments } from "./history/snapshot";
 import { ui } from "./settings/data";
+import { todayInRiyadh } from "./subscriptions/data";
 
 export default function Page() {
   return (
@@ -39,7 +41,8 @@ function NextStep({ title, text, href, action }: { title: string; text: string; 
 async function Home() {
   await connection();
   const supabase = await createClient();
-  const [accounts, accountBalances, buckets, bucketBalances, lastIncome, pending] = await Promise.all([
+  const today = todayInRiyadh();
+  const [accounts, accountBalances, buckets, bucketBalances, lastIncome, pending, due] = await Promise.all([
     supabase.from("accounts").select("id, name").order("sort_order").order("created_at"),
     supabase.from("account_balances").select("account_id, balance"),
     supabase.from("buckets").select("id, name, color, rule_kind, active").order("priority").order("created_at"),
@@ -52,8 +55,16 @@ async function Home() {
       .limit(1)
       .maybeSingle(),
     loadPending(supabase),
+    // Subscriptions due within 7 days, plus anything overdue.
+    supabase
+      .from("subscriptions")
+      .select("id, name, amount, next_due_on")
+      .eq("paused", false)
+      .lte("next_due_on", addDays(today, 7))
+      .order("next_due_on"),
   ]);
-  const error = accounts.error ?? accountBalances.error ?? buckets.error ?? bucketBalances.error ?? lastIncome.error;
+  const error =
+    accounts.error ?? accountBalances.error ?? buckets.error ?? bucketBalances.error ?? lastIncome.error ?? due.error;
   if (error) throw new Error(error.message);
 
   // Balances are never stored: they come from the views.
@@ -189,13 +200,37 @@ async function Home() {
         </>
       )}
 
-      {/* 5. SLOT (Prompt 6): upcoming subscriptions card goes here. */}
-      <section aria-labelledby="subscriptions-slot" className="mt-8">
-        <h2 id="subscriptions-slot" className={heading}>
-          الاشتراكات القادمة
-        </h2>
-        <p className={`${ui.card} mt-3 border-dashed bg-transparent text-label text-muted`}>قريبًا: الاشتراكات المستحقة قريبًا.</p>
-      </section>
+      {/* 5a. Upcoming subscriptions: due within 7 days or overdue. Hidden when there are none. */}
+      {due.data!.length > 0 && (
+        <section aria-labelledby="due-title" className="mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="due-title" className={heading}>
+              الاشتراكات القادمة
+            </h2>
+            <Link href="/subscriptions" className="text-label font-semibold text-accent">
+              الكل
+            </Link>
+          </div>
+          <ul className="mt-3 divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-surface">
+            {due.data!.map((s) => {
+              const daysLeft = daysBetween(today, s.next_due_on);
+              return (
+                <li key={s.id}>
+                  <Link href="/subscriptions" className="flex items-center gap-3 p-4">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{s.name}</span>
+                      <span className={`amount block text-label ${daysLeft < 0 ? "font-medium text-danger" : "text-muted"}`}>
+                        {dueLabel(daysLeft)} · {formatDate(s.next_due_on)}
+                      </span>
+                    </span>
+                    <span className="amount shrink-0 font-semibold">{formatAmount(s.amount)}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* 5. SLOT (Prompt 7): investments summary card goes here. */}
       <section aria-labelledby="investments-slot" className="mt-8">

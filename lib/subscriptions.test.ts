@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { billingDayOf, monthlyEquivalent, nextDueDate, totals, yearlyEquivalent, type Cycle } from "./subscriptions";
+import { billingDayOf, cycleLabel, dueLabel, monthlyEquivalent, nextDueDate, totals, yearlyEquivalent, type Cycle } from "./subscriptions";
 
 const SAR = 100;
 const monthly: Cycle = { count: 1, unit: "month" };
@@ -54,4 +54,30 @@ test("totals skip paused subscriptions", () => {
   ];
   expect(totals(subs)).toEqual({ perMonth: 160 * SAR, perYear: 1_920 * SAR });
   expect(totals([])).toEqual({ perMonth: 0, perYear: 0 });
+});
+
+test("cycle labels", () => {
+  expect(cycleLabel(monthly)).toBe("شهري");
+  expect(cycleLabel(yearly)).toBe("سنوي");
+  expect(cycleLabel(quarterly)).toBe("كل 3 أشهر");
+  expect(cycleLabel({ count: 2, unit: "month" })).toBe("كل شهرين");
+  expect(cycleLabel({ count: 2, unit: "year" })).toBe("كل سنتين");
+  expect(cycleLabel({ count: 18, unit: "month" })).toBe("كل 18 شهرًا");
+});
+
+test("due labels", () => {
+  expect(dueLabel(0)).toBe("اليوم");
+  expect(dueLabel(4)).toBe("بعد 4 أيام");
+  expect(dueLabel(1)).toBe("بعد يوم");
+  expect(dueLabel(2)).toBe("بعد يومين");
+  expect(dueLabel(30)).toBe("بعد 30 يومًا");
+  expect(dueLabel(-2)).toBe("متأخر 2 يوم");
+});
+
+test("example subscriptions: 30 monthly + 400 yearly", () => {
+  expect(monthlyEquivalent(400 * SAR, yearly)).toBe(3333); // 33.33
+  expect(totals([
+    { amount: 30 * SAR, cycle: monthly, paused: false },
+    { amount: 400 * SAR, cycle: yearly, paused: false },
+  ])).toEqual({ perMonth: 6333, perYear: 760 * SAR });
 });

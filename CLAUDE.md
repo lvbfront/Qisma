@@ -97,13 +97,14 @@ app/
   (app)/              authenticated shell
     layout.tsx        bottom tab bar (mobile) / side rail (desktop)
     page.tsx          الرئيسية: accounts, pending transfers, last distribution, buckets,
-                      and two marked SLOTs (subscriptions, investments) for later prompts
+                      upcoming subscriptions, and one marked SLOT (investments, prompt 7)
     buckets/[id]/     bucket detail: balance, entries, actions.tsx (تسجيل صرف, تعديل الرصيد)
     investments/      الاستثمار
     distribute/       توزيع (the primary action): page.tsx (server loader), distribute.tsx
                       (steps 1-2: amount, preview), transfers.tsx (step 3: checklist at
                       ?income=<id>), data.ts (checklist + pending queries, grouping)
-    subscriptions/    الاشتراكات
+    subscriptions/    الاشتراكات: page.tsx (server loader), subscriptions.tsx (totals, list,
+                      add/edit sheet, تم الدفع + undo toast), data.ts (row type, loader, today)
     more/             المزيد (mobile only: links to السجل and الإعدادات)
     history/          السجل: incomes with their split; snapshot.ts reads incomes.snapshot
     settings/         الإعدادات: page.tsx (server loader), settings.tsx (amounts), accounts.tsx,
@@ -152,6 +153,13 @@ proxy.ts              Next 16 proxy entry
 - **Manual changes to a bucket only add entries:** a spend is a negative `spend` entry; setting
   the balance records an `adjustment` entry for the difference. Each form generates its entry id
   once, so a double submit is rejected by the primary key.
+- **Undo never deletes.** Undoing a subscription payment adds an `adjustment` entry for the
+  amount on the linked bucket and moves `next_due_on` back (two statements, marked `ponytail:`).
+- **Subscription `billing_day`:** on save it is the day of the picked date, unless the date was
+  not touched, in which case the stored day is kept (a "31st" subscription sitting on 28 Feb
+  stays a 31st).
+- **Arabic labels for cycles and due dates** come from `cycleLabel()` and `dueLabel()` in
+  `lib/subscriptions.ts`; day differences from `daysBetween()` in `lib/dates.ts`.
 - **Empty states:** every screen has one, and it names the single next action with a button.
 - **Switches** are `<input type="checkbox" role="switch" class="switch">`.
 - **Warning colour** is the `danger` token, for both blocking errors and soft warnings.
@@ -266,11 +274,16 @@ Screens, in rough order. None are built yet; every tab is a placeholder.
 2. ~~**توزيع**~~ — done (phase 4).
 3. ~~**الرئيسية**~~, bucket detail and ~~**السجل**~~ — done (phase 5). Home still has two
    empty SLOTs, filled by items 4 and 5.
-4. **الاشتراكات** — list by next due date, totals per month and per year, add / edit / pause,
-   mark as paid.
+4. ~~**الاشتراكات**~~ — done (phase 6).
 5. **الاستثمار** — available / invested / realised profit, open positions with overdue flags,
    place money, record a return, close.
 7. Manual light/dark toggle, `motion` for the split bar, deploy to Vercel.
+
+## Version 2 backlog
+
+Deliberately left out of version 1:
+- **Push notifications** for subscriptions due soon or overdue (and, later, investments past
+  their expected return date). Version 1 only shows them in the app.
 
 ## Current status
 
@@ -390,4 +403,33 @@ Test data now in the real project's ledger (immutable from the app): the 10,000 
 To wipe ALL ledger test data, the owner runs in the SQL Editor:
 `delete from entries; delete from incomes;`
 
-Next: الاشتراكات (prompt 6), then الاستثمار (prompt 7).
+**Phase 6 (الاشتراكات) — code complete on `phase-6-subscriptions`, not merged yet.**
+
+Done and verified (375px frame, signed in, real Supabase project, example values 30 monthly,
+400 yearly, 90 quarterly paused):
+- Empty state seen on first open, with the "add first subscription" action.
+- Top figures: شهرياً 63.33 ر.س, سنوياً 760 ر.س; the paused one is excluded.
+- List sorted by nearest payment: overdue first ("متأخر 2 يوم"), then "بعد 4 أيام"; yearly and
+  quarterly rows show their monthly equivalent; the paused row is last and dimmed.
+- Add / edit sheet: name, amount, interval + unit with a live label ("سنوي · ما يعادل 33.33 ر.س
+  شهريًا"), date, optional bucket, note, pause, delete.
+- "تم الدفع" (first real call of `pay_subscription`): القسط 1,200 -> 1,170, date moved from
+  19 Nov to 19 Dec, toast shows the new date; a double tap paid once. "تراجع": +30 adjustment,
+  balance back to 1,200, date back to 19 Nov.
+- Home: the "الاشتراكات القادمة" card lists the overdue one and the one due in 4 days.
+- Settings: in the bucket editor a fixed value below the linked monthly total shows the hint
+  ("... أكثر من قيمته بـ 13.33 ر.س") and "تحديث إلى 64 ر.س" fills the field.
+- `npm test`: 31 passing. Lint and build clean. No horizontal scroll at 375px.
+
+Not verified:
+- The home card being hidden when nothing is due (there is always something due in the test data).
+- A month-end subscription edited in the sheet (the billing-day rule is unit-tested and was
+  checked in the database on the local Postgres, but not through this form).
+- Deleting a subscription from the sheet, and a failed undo.
+- These screens at 1440px and in light theme.
+
+Test data added to the real project: three subscriptions ("اشتراك شهري", "اشتراك سنوي",
+"اشتراك فصلي"; deletable from their edit sheets) and, in the ledger, a 30 spend and a +30
+adjustment on القسط from the pay/undo test.
+
+Next: الاستثمار (prompt 7).

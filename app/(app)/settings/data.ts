@@ -26,16 +26,26 @@ export type Bucket = {
   is_investment: boolean;
 };
 
+/** Just enough of a subscription to compare its monthly cost with its bucket. */
+export type LinkedSubscription = {
+  amount: number;
+  cycle_count: number;
+  cycle_unit: "month" | "year";
+  bucket_id: string | null;
+  paused: boolean;
+};
+
 export type SettingsData = {
   referenceIncome: number;
   livingFloor: number;
   accounts: Account[];
   buckets: Bucket[];
+  subscriptions: LinkedSubscription[];
 };
 
 /** Everything the settings screen shows. Works with the server or the browser client. */
 export async function loadSettings(supabase: SupabaseClient): Promise<SettingsData> {
-  const [settings, accounts, buckets] = await Promise.all([
+  const [settings, accounts, buckets, subscriptions] = await Promise.all([
     supabase.from("settings").select("reference_income, living_floor").maybeSingle(),
     supabase.from("accounts").select("id, name, kind, sort_order, receives_income").order("sort_order").order("created_at"),
     supabase
@@ -43,14 +53,16 @@ export async function loadSettings(supabase: SupabaseClient): Promise<SettingsDa
       .select("id, name, rule_kind, rule_value, priority, account_id, color, active, is_investment")
       .order("priority")
       .order("created_at"),
+    supabase.from("subscriptions").select("amount, cycle_count, cycle_unit, bucket_id, paused"),
   ]);
-  const error = settings.error ?? accounts.error ?? buckets.error;
+  const error = settings.error ?? accounts.error ?? buckets.error ?? subscriptions.error;
   if (error) throw new Error(error.message);
   return {
     referenceIncome: settings.data?.reference_income ?? 0,
     livingFloor: settings.data?.living_floor ?? 0,
     accounts: accounts.data as Account[],
     buckets: buckets.data as Bucket[],
+    subscriptions: subscriptions.data as LinkedSubscription[],
   };
 }
 
