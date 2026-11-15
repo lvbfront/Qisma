@@ -92,8 +92,9 @@ app/
     history/          السجل
     settings/         الإعدادات
 components/           shared UI
-lib/                  pure domain logic, no React, no Supabase (money.ts, later allocate.ts)
+lib/                  pure domain logic, no React, no Supabase (money.ts, allocate.ts) + tests
 utils/supabase/       client.ts, server.ts, proxy.ts (session refresh)
+supabase/migrations/  SQL migrations (schema, RLS, views, confirm_distribution)
 proxy.ts              Next 16 proxy entry
 ```
 
@@ -113,6 +114,43 @@ proxy.ts              Next 16 proxy entry
   the secret key, or the database password.
 - **The repo is public on purpose.** Never put real personal amounts in code, tests, seed data
   or screenshots. Use the 10,000 SAR example values only.
+
+## Allocation rules (`lib/allocate.ts`)
+
+`allocate(amount, lines)` returns `{ ok: true, allocations }` or `{ ok: false, error }`.
+Percent values are basis points (10% = 1000).
+
+1. Lines with `enabled = false` are ignored.
+2. Exactly one enabled `remainder` line must exist, else error `remainder`.
+3. Fixed lines are taken first, in priority order.
+4. Percent lines are computed from the FULL amount, rounded DOWN to a whole riyal.
+5. A line with `override` uses it instead of its rule (ignored on the remainder line).
+6. If fixed + percent > amount: error `shortfall` with the missing halalas. Never negative.
+7. The remainder gets amount minus everything else, including rounding leftovers.
+8. Invariant: allocations sum exactly to amount.
+
+Errors are codes plus data; the UI turns them into Arabic text.
+`percentToAmount` / `amountToPercent` convert a rule against the reference income for settings.
+
+## Database
+
+Schema lives in `supabase/migrations/`. Tables: `accounts`, `buckets`, `incomes`, `entries`,
+`settings`. Every table has `user_id` and RLS (own rows only, signed-in users only).
+
+- **No bank account numbers, IBANs or bank credentials anywhere.** An account is just a name.
+- **Balances are never stored.** Read them from the views `bucket_balances` (sum of entries per
+  bucket) and `account_balances` (sum of bucket balances per account).
+- **Immutability is enforced by the database**, not just by convention: the client cannot
+  insert/update/delete `incomes`, cannot update or delete `entries` (except the `transfer_done`
+  flag), and cannot insert `allocation` entries directly.
+- **Confirming a distribution is one call:** `rpc('confirm_distribution', { p_id, p_amount,
+  p_received_on, p_note, p_snapshot, p_allocations })`. It inserts the income and all its
+  allocation entries atomically and rejects allocations that do not sum to the amount.
+  `p_id` is a client-generated uuid, so a double submit fails instead of recording twice.
+- `incomes.snapshot` stores the exact lines and rules used, so history survives rule changes.
+- `buckets.color` is 1..8 and maps to the `bucket-N` design tokens.
+- Applying migrations: paste the file into the Supabase dashboard SQL Editor and run it
+  (no database password needed). New changes go in a NEW migration file; never edit an applied one.
 
 ## Domain glossary
 
@@ -139,27 +177,22 @@ Deploy: import the repo in Vercel, set `NEXT_PUBLIC_SUPABASE_URL` and
 
 ## Current status
 
-**Phase 1 (setup) — complete, merged to `main`.**
+**Phase 1 (setup) — complete, merged to `main`.** Scaffold, tokens, money helper, Supabase auth
+(sign-in/sign-out verified live), app shell. Not deployed to Vercel yet.
+
+**Phase 2 (engine) — code complete on `phase-2-engine`; migration NOT yet applied to the
+real Supabase project (waiting for the owner to run it and confirm).**
 
 Done and verified:
-- Next.js 16.4 + Tailwind v4 scaffold, `lang="ar" dir="rtl"`, IBM Plex Sans Arabic, logical properties only.
-- Final design tokens in `app/globals.css` (light/dark via `light-dark()`, `data-theme` override
-  ready for a toggle), 8 bucket colours, all pairs checked for WCAG AA.
-- `lib/money.ts` + tests (`npm test`: 4 passing).
-- Supabase wiring: `utils/supabase/{client,server,proxy}.ts` + root `proxy.ts`, copied from the
-  official `with-supabase` template (publishable key, `getClaims()`); the gate fails closed without env vars.
-- `/login` (email + password, Arabic, no sign-up) and sign-out in settings.
-- App shell: bottom tab bar < md, side rail >= md; four placeholder pages.
-- Layout checked in headless Chrome at 375px and 1440px, light and dark, on `/login` and the four
-  tabs: RTL, no horizontal scroll.
-- Live auth checked against the real Supabase project: signed out, every app route redirects to
-  `/login`; after sign-in all four tabs load and `/login` redirects to `/`; sign-out returns to
-  `/login` and the routes are gated again.
-- `npm run lint` and `npm run build` clean. MIT license added.
+- `lib/allocate.ts` (+ `percentToAmount`, `amountToPercent`) with 9 tests, including the
+  10,000 SAR example and a 5,000-case property test. `npm test`: 13 passing.
+- `supabase/migrations/20261115120000_schema.sql`: 5 tables, RLS, 2 balance views,
+  `confirm_distribution()`. Applied cleanly to a throwaway local Postgres 16 with a stubbed
+  `auth` schema and checked there: user isolation, anon has no access, atomic rollback,
+  double-submit rejection, immutability, balances. Not yet run on real Supabase.
 
 Not done yet:
-- Not deployed to Vercel.
-- No database tables; `motion` is installed but unused (nothing to animate yet).
-- Manual theme toggle (tokens already support it).
+- Nothing in the UI uses the engine or the tables yet.
+- `motion` unused; manual theme toggle; Vercel deploy.
 
-Next: phase 2 (schema + RLS, accounts/buckets/rules, pure allocation function, the split bar).
+Next: phase 3 (settings UI for accounts and buckets, the split bar, distribution preview and confirm).
