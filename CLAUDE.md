@@ -246,22 +246,27 @@ Screens, in rough order. None are built yet; every tab is a placeholder.
 **Phase 2 (engine) — complete, merged to `main`.** `lib/allocate.ts`, first migration applied
 to the real project and probed signed-out (everything denied).
 
-**Phase 2.5 (scope: subscriptions + investments) — code complete on `phase-2-5-scope`;
-the second migration is NOT yet applied to the real Supabase project (waiting for the owner).**
+**Phase 2.5 (scope: subscriptions + investments) — complete, merged to `main`.**
 
 Done and verified:
 - `lib/subscriptions.ts` and `lib/investments.ts` with tests (month-end dates, yearly cycles,
   29 Feb, partial returns, loss, profit, overdue). `npm test`: 24 passing.
 - `supabase/migrations/20261115150000_subscriptions_investments.sql`: 2 tables, `is_investment`,
-  2 entry kinds + links, 4 functions, 2 views. Applied on top of the first migration on a
-  throwaway local Postgres 16 and checked there: user isolation, signed-out denied, double
-  submit rejected, 31 Jan -> 28 Feb -> 31 Mar, over-investing refused, loss closable,
-  immutability, deleting a subscription keeps its history.
+  2 entry kinds + links, 4 functions, 2 views. **Applied to the real Supabase project** (owner
+  ran it in the SQL Editor; check query returned 7 tables with RLS, 0 without, 4 views,
+  5 functions, `is_investment` present).
+- Signed-out probe of the real project with the publishable key: all 7 tables, all 4 views,
+  inserts into `subscriptions` / `investments` / `entries` and all 5 functions return
+  `42501 permission denied`.
+- On a throwaway local Postgres 16 (both migrations): user isolation, double submit rejected,
+  31 Jan -> 28 Feb -> 31 Mar, over-investing refused, loss closable, immutability, deleting a
+  subscription keeps its history.
 - Navigation: 5 items on mobile (توزيع in the centre as the primary action, المزيد holding
   السجل and الإعدادات), 6 destinations on the desktop rail, 3 new placeholder pages.
   Checked at 375px and 1440px, light and dark: RTL, no horizontal scroll. Lint and build clean.
 
 Not verified yet:
-- The second migration on the real project.
 - The signed-in path against the real project (own rows, calling the functions). It gets
   exercised when the screens are wired to the tables.
+
+Next: the screens, in the Backlog order (settings first).
