@@ -283,7 +283,7 @@ Not verified yet:
 - The signed-in path against the real project (own rows, calling the functions). It gets
   exercised when the screens are wired to the tables.
 
-**Phase 3 (settings screen) — code complete on `phase-3-settings`, not merged yet.**
+**Phase 3 (settings screen) — complete, merged to `main`.**
 
 Done and verified (in a 375px frame, signed in, against the real Supabase project, with the
 10,000 SAR example values, light and dark):
@@ -301,12 +301,11 @@ Done and verified (in a 375px frame, signed in, against the real Supabase projec
   and the editor says so before saving.
 - This was also the first check of the signed-in path on the real project: reads, inserts,
   updates and the settings upsert all work under RLS.
+- Reorder: arrow keys on the handle tested end to end (order persists after reload);
+  touch drag confirmed by the owner on a phone.
 - `npm test`: 25 passing. Lint and build clean. No horizontal scroll at 375px.
 
 Not verified:
-- **Dragging by pointer/touch.** The automated browser tab was in the background, where
-  animations do not run, so only the keyboard path (arrow keys on the handle) was tested end to
-  end, including that the new order persists. Try a real drag on a phone.
 - The settings screen at 1440px with data (the shell was checked there earlier).
 - Sign-in after these changes was done by the owner, sign-out was not re-run.
 
