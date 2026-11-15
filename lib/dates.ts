@@ -17,3 +17,11 @@ export const daysBetween = (from: string, to: string): number =>
 /** The ISO date `days` after `iso`. */
 export const addDays = (iso: string, days: number): string =>
   new Date(Date.parse(iso) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** A length of time in days, in Arabic: "يوم واحد", "يومان", "5 أيام", "40 يومًا". */
+export function daysLabel(days: number): string {
+  if (days <= 0) return "أقل من يوم";
+  if (days === 1) return "يوم واحد";
+  if (days === 2) return "يومان";
+  return days <= 10 ? `${days} أيام` : `${days} يومًا`;
+}

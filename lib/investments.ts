@@ -30,3 +30,19 @@ export function daysToExpectedReturn(investment: Investment, today: string): num
 
 /** Open and past its expected return date. */
 export const isOverdue = (investment: Investment, today: string) => (daysToExpectedReturn(investment, today) ?? 0) < 0;
+
+/** Open positions grouped by platform. Groups are in alphabetical order: the app does not rank platforms. */
+export function groupByPlatform<T extends { platform: string; outstanding: number; expectedReturnOn: string | null }>(
+  positions: T[],
+): { platform: string; subtotal: number; items: T[] }[] {
+  const groups = new Map<string, T[]>();
+  for (const p of positions) groups.set(p.platform, [...(groups.get(p.platform) ?? []), p]);
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, "ar"))
+    .map(([platform, items]) => ({
+      platform,
+      subtotal: items.reduce((sum, p) => sum + p.outstanding, 0),
+      // Soonest expected return first; positions without a date last.
+      items: [...items].sort((a, b) => (a.expectedReturnOn ?? "9999").localeCompare(b.expectedReturnOn ?? "9999")),
+    }));
+}

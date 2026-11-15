@@ -39,5 +39,7 @@ export const formatSigned = (halalas: number): string =>
 /**
  * Basis points as "20%" or "12.5%".
  * Wrapped in an LTR isolate: after Arabic letters a bare "38%" is drawn as "%38".
+ * `signed` adds a "+" to gains: "+8%", "-100%".
  */
-export const formatPercent = (bps: number): string => `\u2066${bps / 100}%\u2069`;
+export const formatPercent = (bps: number, signed = false): string =>
+  `\u2066${signed && bps > 0 ? "+" : ""}${bps / 100}%\u2069`;

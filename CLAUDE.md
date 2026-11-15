@@ -97,9 +97,11 @@ app/
   (app)/              authenticated shell
     layout.tsx        bottom tab bar (mobile) / side rail (desktop)
     page.tsx          الرئيسية: accounts, pending transfers, last distribution, buckets,
-                      upcoming subscriptions, and one marked SLOT (investments, prompt 7)
+                      upcoming subscriptions, investments summary
     buckets/[id]/     bucket detail: balance, entries, actions.tsx (تسجيل صرف, تعديل الرصيد)
-    investments/      الاستثمار
+    investments/      الاستثمار: page.tsx (server loader), investments.tsx (figures, bar, open
+                      positions by platform, new / receive / close sheets, closed list),
+                      data.ts (loader for investment_summary and investment_positions)
     distribute/       توزيع (the primary action): page.tsx (server loader), distribute.tsx
                       (steps 1-2: amount, preview), transfers.tsx (step 3: checklist at
                       ?income=<id>), data.ts (checklist + pending queries, grouping)
@@ -160,6 +162,10 @@ proxy.ts              Next 16 proxy entry
   stays a 31st).
 - **Arabic labels for cycles and due dates** come from `cycleLabel()` and `dueLabel()` in
   `lib/subscriptions.ts`; day differences from `daysBetween()` in `lib/dates.ts`.
+- **Investments are cost basis only:** what was paid in and what came back. No market prices,
+  no advice, no ranking: platforms are always listed alphabetically (`groupByPlatform`).
+- **`SplitBar` colours:** bucket 1-8, `"remainder"` (accent) and `"muted"` (money that is away,
+  used for "invested" in the available/invested bar). `thin` halves its height.
 - **Empty states:** every screen has one, and it names the single next action with a button.
 - **Switches** are `<input type="checkbox" role="switch" class="switch">`.
 - **Warning colour** is the `danger` token, for both blocking errors and soft warnings.
@@ -275,8 +281,7 @@ Screens, in rough order. None are built yet; every tab is a placeholder.
 3. ~~**الرئيسية**~~, bucket detail and ~~**السجل**~~ — done (phase 5). Home still has two
    empty SLOTs, filled by items 4 and 5.
 4. ~~**الاشتراكات**~~ — done (phase 6).
-5. **الاستثمار** — available / invested / realised profit, open positions with overdue flags,
-   place money, record a return, close.
+5. ~~**الاستثمار**~~ — built (phase 7); live test not finished, see Current status.
 7. Manual light/dark toggle, `motion` for the split bar, deploy to Vercel.
 
 ## Version 2 backlog
@@ -433,4 +438,30 @@ Test data added to the real project: three subscriptions ("اشتراك شهري
 "اشتراك فصلي"; deletable from their edit sheets) and, in the ledger, a 30 spend and a +30
 adjustment on القسط from the pay/undo test.
 
-Next: الاستثمار (prompt 7).
+**Phase 7 (الاستثمار) — code written on `phase-7-investments`; live test NOT finished, not merged.**
+
+Built:
+- `/investments`: three figures from `investment_summary` (المتاح, مستثمر حالياً, الربح المحقق),
+  a thin available/invested bar, open investments grouped by platform with each group's
+  outstanding subtotal, overdue tag, "استثمار جديد" (platform suggestions from platforms already
+  used, blocks amounts above المتاح), "استلمت مبلغ" followed by "هل انتهى هذا الاستثمار؟",
+  "إغلاق" with a confirmation, and a collapsed list of closed investments (invested, returned,
+  result in SAR and percent, duration).
+- Empty state when no bucket is flagged as the investment bucket, linking to settings.
+- Home: the investments summary card with the three figures and the nearest expected return.
+
+Verified:
+- `npm test`: 34 passing (includes platform grouping and the 500 -> 540 -> +40 example).
+  Lint and build clean.
+- Live, signed in, 375px: the screen loads with المتاح 1,500 ر.س, zeros for the other two, the
+  bar's text alternative, and the "no open investments" empty state.
+
+NOT verified (the browser automation connection dropped during the first write test):
+- Every write path: `open_investment`, `record_investment_return`, `close_investment` from the
+  UI, the above-المتاح block, the "finished?" step, the write-off, the closed list, grouping
+  with real rows, the overdue tag, the home card.
+- The interrupted test may have created up to three test investments ("تجربة أولى" 500 on
+  "منصة أ", "تجربة متأخرة" 300 on "منصة ب", "تجربة خسارة" 100 on "منصة أ"). Unknown which, if any.
+- The empty state for "no investment bucket", 1440px and light theme.
+
+Next: finish the live test of phase 7, then merge.

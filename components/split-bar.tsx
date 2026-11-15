@@ -17,7 +17,16 @@ export type Segment = {
  * In RTL it fills from the inline-start (right) edge.
  * `shortfall` > 0 switches the whole bar to the warning state.
  */
-export function SplitBar({ segments, shortfall = 0 }: { segments: Segment[]; shortfall?: number }) {
+export function SplitBar({
+  segments,
+  shortfall = 0,
+  thin = false,
+}: {
+  segments: Segment[];
+  shortfall?: number;
+  /** Half height, for a secondary bar. */
+  thin?: boolean;
+}) {
   const reduceMotion = useReducedMotion();
   const transition = reduceMotion ? { duration: 0 } : { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const };
 
@@ -30,7 +39,7 @@ export function SplitBar({ segments, shortfall = 0 }: { segments: Segment[]; sho
         : "لا توجد بنود";
 
   return (
-    <div role="img" aria-label={label} className="flex h-4 w-full gap-0.5 overflow-hidden rounded-full bg-hairline">
+    <div role="img" aria-label={label} className={`flex w-full gap-0.5 overflow-hidden rounded-full bg-hairline ${thin ? "h-2" : "h-4"}`}>
       {shortfall > 0 ? (
         <div className="w-full bg-danger" />
       ) : (

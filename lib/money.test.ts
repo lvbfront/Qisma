@@ -38,6 +38,8 @@ test("formatNumber and formatPercent", () => {
   expect(formatPercent(2000)).toBe("\u206620%\u2069"); // LTR isolate keeps % after the digits in RTL text
   expect(formatPercent(1250)).toBe("\u206612.5%\u2069");
   expect(parseAmount("12.5")).toBe(1250); // a typed percent parses to basis points
+  expect(formatPercent(800, true)).toBe("\u2066+8%\u2069");
+  expect(formatPercent(-10000, true)).toBe("\u2066-100%\u2069");
 });
 
 test("formatSigned keeps the sign in front of the digits", () => {

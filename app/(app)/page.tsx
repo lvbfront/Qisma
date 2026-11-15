@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { bucketBg } from "@/components/bucket-color";
 import { SplitBar } from "@/components/split-bar";
 import { addDays, daysBetween, formatDate } from "@/lib/dates";
-import { formatAmount } from "@/lib/money";
+import { formatAmount, formatSigned } from "@/lib/money";
 import { dueLabel } from "@/lib/subscriptions";
 import { createClient } from "@/utils/supabase/server";
 import { loadPending } from "./distribute/data";
@@ -42,10 +42,10 @@ async function Home() {
   await connection();
   const supabase = await createClient();
   const today = todayInRiyadh();
-  const [accounts, accountBalances, buckets, bucketBalances, lastIncome, pending, due] = await Promise.all([
+  const [accounts, accountBalances, buckets, bucketBalances, lastIncome, pending, due, investSummary, nextReturn] = await Promise.all([
     supabase.from("accounts").select("id, name").order("sort_order").order("created_at"),
     supabase.from("account_balances").select("account_id, balance"),
-    supabase.from("buckets").select("id, name, color, rule_kind, active").order("priority").order("created_at"),
+    supabase.from("buckets").select("id, name, color, rule_kind, active, is_investment").order("priority").order("created_at"),
     supabase.from("bucket_balances").select("bucket_id, balance"),
     supabase
       .from("incomes")
@@ -62,9 +62,26 @@ async function Home() {
       .eq("paused", false)
       .lte("next_due_on", addDays(today, 7))
       .order("next_due_on"),
+    supabase.from("investment_summary").select("available, currently_invested, realised_profit").maybeSingle(),
+    // The soonest expected return among open investments (may already be overdue).
+    supabase
+      .from("investment_positions")
+      .select("expected_return_on")
+      .eq("status", "open")
+      .not("expected_return_on", "is", null)
+      .order("expected_return_on")
+      .limit(1)
+      .maybeSingle(),
   ]);
   const error =
-    accounts.error ?? accountBalances.error ?? buckets.error ?? bucketBalances.error ?? lastIncome.error ?? due.error;
+    accounts.error ??
+    accountBalances.error ??
+    buckets.error ??
+    bucketBalances.error ??
+    lastIncome.error ??
+    due.error ??
+    investSummary.error ??
+    nextReturn.error;
   if (error) throw new Error(error.message);
 
   // Balances are never stored: they come from the views.
@@ -72,6 +89,11 @@ async function Home() {
   const bucketBalance = new Map(bucketBalances.data!.map((b) => [b.bucket_id, b.balance as number]));
   // Paused buckets stay visible while they still hold money.
   const shownBuckets = buckets.data!.filter((b) => b.active || bucketBalance.get(b.id));
+  const invest = investSummary.data;
+  // Show the investments card once there is an investment bucket or any investment history.
+  const showInvest =
+    buckets.data!.some((b) => b.is_investment && b.active) || !!invest?.currently_invested || !!invest?.realised_profit;
+  const nextReturnOn = nextReturn.data?.expected_return_on as string | undefined;
   const last = lastIncome.data;
   const lastRows = last ? snapshotRows(last.snapshot) : [];
 
@@ -232,13 +254,42 @@ async function Home() {
         </section>
       )}
 
-      {/* 5. SLOT (Prompt 7): investments summary card goes here. */}
-      <section aria-labelledby="investments-slot" className="mt-8">
-        <h2 id="investments-slot" className={heading}>
-          ملخص الاستثمار
-        </h2>
-        <p className={`${ui.card} mt-3 border-dashed bg-transparent text-label text-muted`}>قريبًا: المتاح، المستثمَر، والربح المحقق.</p>
-      </section>
+      {/* 5b. Investments summary: cost basis only. Hidden until an investment bucket exists. */}
+      {showInvest && (
+        <section aria-labelledby="invest-title" className="mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="invest-title" className={heading}>
+              ملخص الاستثمار
+            </h2>
+            <Link href="/investments" className="text-label font-semibold text-accent">
+              التفاصيل
+            </Link>
+          </div>
+          <Link href="/investments" className={`${ui.card} mt-3 block`}>
+            <dl className="grid grid-cols-3 gap-3">
+              <div className="min-w-0">
+                <dt className="text-label text-muted">المتاح</dt>
+                <dd className="amount mt-1 whitespace-nowrap font-bold">{formatAmount(invest?.available ?? 0)}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-label text-muted">مستثمر حالياً</dt>
+                <dd className="amount mt-1 whitespace-nowrap font-bold">{formatAmount(invest?.currently_invested ?? 0)}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-label text-muted">الربح المحقق</dt>
+                <dd className={`amount mt-1 whitespace-nowrap font-bold ${(invest?.realised_profit ?? 0) < 0 ? "text-danger" : ""}`}>
+                  {formatSigned(invest?.realised_profit ?? 0)}
+                </dd>
+              </div>
+            </dl>
+            <p className={`amount mt-3 text-label ${nextReturnOn && nextReturnOn < today ? "font-medium text-danger" : "text-muted"}`}>
+              {nextReturnOn
+                ? `أقرب عودة متوقعة: ${formatDate(nextReturnOn)} · ${dueLabel(daysBetween(today, nextReturnOn))}`
+                : "لا توجد عودة متوقعة مسجّلة."}
+            </p>
+          </Link>
+        </section>
+      )}
     </>
   );
 }
