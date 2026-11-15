@@ -21,9 +21,9 @@ export function Nav() {
   return (
     <nav
       aria-label="التنقل الرئيسي"
-      className="fixed inset-x-0 bottom-0 z-10 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:start-0 md:end-auto md:w-56 md:flex-col md:gap-1 md:border-t-0 md:border-e md:p-3"
+      className="fixed inset-x-0 bottom-0 z-10 flex border-t border-hairline bg-surface pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:start-0 md:end-auto md:w-56 md:flex-col md:gap-1 md:border-t-0 md:border-e md:p-3"
     >
-      <div className="hidden px-3 pt-3 pb-5 text-xl font-bold md:block">قِسمة</div>
+      <div className="hidden px-3 pt-3 pb-5 text-heading font-bold md:block">قِسمة</div>
       {tabs.map(({ href, label, icon }) => {
         const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
         return (
@@ -31,8 +31,8 @@ export function Nav() {
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
-            className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs transition-colors md:min-h-0 md:flex-none md:flex-row md:justify-start md:gap-3 md:rounded-control md:px-3 md:py-2.5 md:text-base ${
-              active ? "font-semibold text-accent md:bg-bg" : "text-muted hover:text-ink"
+            className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-label transition-colors md:min-h-0 md:flex-none md:flex-row md:justify-start md:gap-3 md:rounded-control md:px-3 md:py-2.5 md:text-base ${
+              active ? "font-semibold text-ink md:bg-bg" : "text-muted hover:text-ink"
             }`}
           >
             <svg

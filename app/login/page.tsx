@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { signIn } from "./actions";
 
 const field =
-  "mt-1.5 w-full rounded-control border border-line bg-surface px-3 py-2.5 text-base outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30";
+  "mt-1.5 w-full rounded-control border border-hairline bg-surface px-3 py-2.5 text-base outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30";
 
 export default function LoginPage() {
   const [error, action, pending] = useActionState(signIn, null);
@@ -14,7 +14,7 @@ export default function LoginPage() {
       <p className="mt-1 text-muted">سجّل الدخول للمتابعة</p>
 
       <form action={action} className="mt-8 flex flex-col gap-4">
-        <label className="text-sm font-medium">
+        <label className="text-label font-medium">
           البريد الإلكتروني
           <input
             name="email"
@@ -25,7 +25,7 @@ export default function LoginPage() {
             className={`${field} text-end`}
           />
         </label>
-        <label className="text-sm font-medium">
+        <label className="text-label font-medium">
           كلمة المرور
           <input
             name="password"
@@ -37,7 +37,7 @@ export default function LoginPage() {
           />
         </label>
         {error && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-label text-danger">
             {error}
           </p>
         )}
