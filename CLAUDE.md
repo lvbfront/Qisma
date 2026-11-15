@@ -180,16 +180,22 @@ Deploy: import the repo in Vercel, set `NEXT_PUBLIC_SUPABASE_URL` and
 **Phase 1 (setup) — complete, merged to `main`.** Scaffold, tokens, money helper, Supabase auth
 (sign-in/sign-out verified live), app shell. Not deployed to Vercel yet.
 
-**Phase 2 (engine) — code complete on `phase-2-engine`; migration NOT yet applied to the
-real Supabase project (waiting for the owner to run it and confirm).**
+**Phase 2 (engine) — complete, merged to `main`.**
 
 Done and verified:
 - `lib/allocate.ts` (+ `percentToAmount`, `amountToPercent`) with 9 tests, including the
   10,000 SAR example and a 5,000-case property test. `npm test`: 13 passing.
 - `supabase/migrations/20261115120000_schema.sql`: 5 tables, RLS, 2 balance views,
-  `confirm_distribution()`. Applied cleanly to a throwaway local Postgres 16 with a stubbed
-  `auth` schema and checked there: user isolation, anon has no access, atomic rollback,
-  double-submit rejection, immutability, balances. Not yet run on real Supabase.
+  `confirm_distribution()`. **Applied to the real Supabase project** (owner ran it in the SQL
+  Editor; all 5 tables report `rowsecurity = true`).
+- Signed-out probe of the real project with the publishable key: every table, both views, an
+  insert and the function all return `42501 permission denied`.
+- User isolation, atomic rollback, double-submit rejection, immutability and balances were
+  checked on a throwaway local Postgres 16 with a stubbed `auth` schema.
+
+Not verified yet:
+- The signed-in path against the real project (reading/writing own rows, calling
+  `confirm_distribution`). It gets exercised when phase 3 wires the UI to the tables.
 
 Not done yet:
 - Nothing in the UI uses the engine or the tables yet.
