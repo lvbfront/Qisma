@@ -102,8 +102,13 @@ app/
     subscriptions/    الاشتراكات
     more/             المزيد (mobile only: links to السجل and الإعدادات)
     history/          السجل
-    settings/         الإعدادات
-components/           shared UI (nav.tsx: 5 items on mobile, 6 destinations on desktop)
+    settings/         الإعدادات: page.tsx (server loader), settings.tsx (amounts), accounts.tsx,
+                      buckets.tsx (list + editor), preview.tsx, data.ts (types, queries), use-writes.ts
+components/           shared UI:
+  nav.tsx             5 items on mobile, 6 destinations on desktop
+  split-bar.tsx       THE split bar (+ bucketBg for colour dots). Reuse it; never re-draw it.
+  sheet.tsx           modal on native <dialog>: bottom sheet on mobile, card on desktop
+  sortable.tsx        drag-to-reorder list (handle, or arrow keys on the handle)
 lib/                  pure domain logic + tests, no React, no Supabase:
                       money.ts, allocate.ts, subscriptions.ts, investments.ts
 utils/supabase/       client.ts, server.ts, proxy.ts (session refresh)
@@ -123,6 +128,15 @@ proxy.ts              Next 16 proxy entry
 - **RTL:** logical properties only (`ps/pe/ms/me`, `start/end`, `border-s/e`). Never `left/right`,
   `pl/pr`, `ml/mr`.
 - **Digits are always Western (0-9)**, including inside Arabic text.
+- **Reading Supabase in a server component:** put it in an async component inside `<Suspense>`
+  and call `await connection()` before `createClient()` (see `settings/page.tsx`). Cache
+  Components is on, and the Supabase client reads the clock, which is only allowed at request time.
+- **Browser Supabase client:** create it lazily inside event handlers, never during render
+  (same clock rule). Client-side writes rely on RLS; nothing is trusted from the browser.
+- **Percentages** are basis points in data and `formatPercent()` on screen (it is bidi-safe;
+  a bare "38%" after Arabic text is drawn as "%38"). A typed percent is read with `parseAmount()`.
+- **Switches** are `<input type="checkbox" role="switch" class="switch">`.
+- **Warning colour** is the `danger` token, for both blocking errors and soft warnings.
 - **Secrets:** `.env.local` is git-ignored; `.env.example` has empty values. Never commit real keys,
   the secret key, or the database password.
 - **The repo is public on purpose.** Never put real personal amounts in code, tests, seed data
@@ -269,4 +283,37 @@ Not verified yet:
 - The signed-in path against the real project (own rows, calling the functions). It gets
   exercised when the screens are wired to the tables.
 
-Next: the screens, in the Backlog order (settings first).
+**Phase 3 (settings screen) — code complete on `phase-3-settings`, not merged yet.**
+
+Done and verified (in a 375px frame, signed in, against the real Supabase project, with the
+10,000 SAR example values, light and dark):
+- Reference income and living floor: saved on blur, preview follows typing.
+- Accounts: first-run offer of two accounts, add, rename, kind, which one receives income
+  (moving it releases the previous one), delete, reorder.
+- Buckets: first-run starter set of seven with empty values, list in priority order, add, edit
+  (name, colour, account, rule switch, investment switch, pause), delete, reorder.
+- Live conversion while typing (10% -> "= 1,000 ر.س من راتبك المرجعي", 2,000 -> "= 20% ...") and the
+  value converts when switching between amount and percent.
+- Split bar from the real `allocate()` above the list and inside the editor ("after saving"):
+  the example gives 3,800 ر.س (38%). Shortfall turns the bar to the warning colour and blocks
+  saving; a remainder below the living floor warns but saves.
+- Only one remainder / one investment bucket: taking either releases the previous holder,
+  and the editor says so before saving.
+- This was also the first check of the signed-in path on the real project: reads, inserts,
+  updates and the settings upsert all work under RLS.
+- `npm test`: 25 passing. Lint and build clean. No horizontal scroll at 375px.
+
+Not verified:
+- **Dragging by pointer/touch.** The automated browser tab was in the background, where
+  animations do not run, so only the keyboard path (arrow keys on the handle) was tested end to
+  end, including that the new order persists. Try a real drag on a phone.
+- The settings screen at 1440px with data (the shell was checked there earlier).
+- Sign-in after these changes was done by the owner, sign-out was not re-run.
+
+Known simplifications (marked `ponytail:` in the code): moving the remainder, the investment
+flag or the income account is two statements, not one transaction.
+
+The real project currently holds the example data from this test (2 accounts, 7 buckets,
+reference income 10,000, living floor 3,000). The owner chose to keep it.
+
+Next: توزيع (enter amount, live split bar, adjust, confirm, transfers list).

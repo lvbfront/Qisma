@@ -1,0 +1,84 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { allocate, type Line, type RuleKind } from "@/lib/allocate";
+
+export type AccountKind = "current" | "savings" | "investment" | "cash";
+
+export type Account = {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  sort_order: number;
+  receives_income: boolean;
+};
+
+export type Bucket = {
+  id: string;
+  name: string;
+  rule_kind: RuleKind;
+  /** fixed: halalas. percent: basis points. remainder: 0. */
+  rule_value: number;
+  priority: number;
+  account_id: string;
+  /** 1-8, a bucket-N colour token */
+  color: number;
+  active: boolean;
+  is_investment: boolean;
+};
+
+export type SettingsData = {
+  referenceIncome: number;
+  livingFloor: number;
+  accounts: Account[];
+  buckets: Bucket[];
+};
+
+/** Everything the settings screen shows. Works with the server or the browser client. */
+export async function loadSettings(supabase: SupabaseClient): Promise<SettingsData> {
+  const [settings, accounts, buckets] = await Promise.all([
+    supabase.from("settings").select("reference_income, living_floor").maybeSingle(),
+    supabase.from("accounts").select("id, name, kind, sort_order, receives_income").order("sort_order").order("created_at"),
+    supabase
+      .from("buckets")
+      .select("id, name, rule_kind, rule_value, priority, account_id, color, active, is_investment")
+      .order("priority")
+      .order("created_at"),
+  ]);
+  const error = settings.error ?? accounts.error ?? buckets.error;
+  if (error) throw new Error(error.message);
+  return {
+    referenceIncome: settings.data?.reference_income ?? 0,
+    livingFloor: settings.data?.living_floor ?? 0,
+    accounts: accounts.data as Account[],
+    buckets: buckets.data as Bucket[],
+  };
+}
+
+export const toLine = (b: Bucket): Line => ({
+  bucketId: b.id,
+  kind: b.rule_kind,
+  value: b.rule_value,
+  priority: b.priority,
+  enabled: b.active,
+});
+
+/** The split of the reference income under the given buckets (the real allocate()). */
+export const previewSplit = (buckets: Bucket[], referenceIncome: number) =>
+  allocate(referenceIncome, buckets.map(toLine));
+
+/** Classes shared by the settings forms. */
+export const ui = {
+  field:
+    "w-full rounded-control border border-hairline bg-surface px-3 py-2.5 text-base outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30",
+  label: "block text-label font-medium",
+  primary:
+    "rounded-control bg-accent px-4 py-3 font-semibold text-on-accent transition-opacity disabled:opacity-50",
+  secondary: "rounded-control border border-hairline bg-surface px-4 py-3 font-medium",
+  card: "rounded-card border border-hairline bg-surface p-4",
+};
+
+/** Arabic message for a failed Supabase write. */
+export function errorText(error: { code?: string }): string {
+  if (error.code === "23503") return "لا يمكن الحذف لأنه مرتبط ببيانات أخرى.";
+  if (error.code === "23505") return "هذه الصفة مسموحة لعنصر واحد فقط.";
+  return "تعذّر الحفظ. حاول مرة أخرى.";
+}

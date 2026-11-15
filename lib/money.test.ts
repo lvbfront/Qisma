@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatAmount, parseAmount } from "./money";
+import { formatAmount, formatNumber, formatPercent, parseAmount } from "./money";
 
 test("parseAmount", () => {
   expect(parseAmount("10000")).toBe(1_000_000);
@@ -30,4 +30,12 @@ test("round trip", () => {
   for (const h of [0, 1, 99, 100, 123_456_789]) {
     expect(parseAmount(formatAmount(h).replace(" ر.س", ""))).toBe(h);
   }
+});
+
+test("formatNumber and formatPercent", () => {
+  expect(formatNumber(1_000_000)).toBe("10,000");
+  expect(parseAmount(formatNumber(1_000_050))).toBe(1_000_050);
+  expect(formatPercent(2000)).toBe("\u206620%\u2069"); // LTR isolate keeps % after the digits in RTL text
+  expect(formatPercent(1250)).toBe("\u206612.5%\u2069");
+  expect(parseAmount("12.5")).toBe(1250); // a typed percent parses to basis points
 });

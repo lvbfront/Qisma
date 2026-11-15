@@ -28,6 +28,7 @@
 
   --duration-ui: 200ms;
   --duration-bar: 450ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -85,4 +86,41 @@ body {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* <input type="checkbox" role="switch" class="switch"> */
+.switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  inline-size: 2.75rem;
+  block-size: 1.625rem;
+  border-radius: 999px;
+  background: var(--muted);
+  cursor: pointer;
+  transition: background var(--duration-ui) var(--ease);
+}
+.switch::before {
+  content: "";
+  position: absolute;
+  inset-block: 3px;
+  inset-inline-start: 3px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: inset-inline-start var(--duration-ui) var(--ease);
+}
+.switch:checked {
+  background: var(--accent);
+}
+.switch:checked::before {
+  inset-inline-start: calc(100% - 1.25rem - 3px);
+}
+.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

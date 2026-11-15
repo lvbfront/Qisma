@@ -14,8 +14,8 @@ export function parseAmount(input: string): number | null {
   return Number.isSafeInteger(halalas) ? halalas : null;
 }
 
-/** Format halalas as "10,000 ر.س" (halalas shown only when non-zero: "10,000.50 ر.س"). */
-export function formatAmount(halalas: number): string {
+/** Halalas as a plain number string: "10,000" or "10,000.50". Safe to feed back to parseAmount. */
+export function formatNumber(halalas: number): string {
   if (!Number.isSafeInteger(halalas)) throw new RangeError("halalas must be an integer");
   const abs = Math.abs(halalas);
   const frac = abs % 100;
@@ -23,5 +23,14 @@ export function formatAmount(halalas: number): string {
     Math.trunc(abs / 100).toLocaleString("en-US") +
     (frac ? "." + String(frac).padStart(2, "0") : "");
   // LTR isolate keeps the minus sign in front of the digits inside RTL text.
-  return (halalas < 0 ? `⁦-${num}⁩` : num) + " ر.س";
+  return halalas < 0 ? `\u2066-${num}\u2069` : num;
 }
+
+/** Format halalas as "10,000 ر.س" (halalas shown only when non-zero: "10,000.50 ر.س"). */
+export const formatAmount = (halalas: number): string => formatNumber(halalas) + " ر.س";
+
+/**
+ * Basis points as "20%" or "12.5%".
+ * Wrapped in an LTR isolate: after Arabic letters a bare "38%" is drawn as "%38".
+ */
+export const formatPercent = (bps: number): string => `\u2066${bps / 100}%\u2069`;
