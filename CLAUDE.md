@@ -363,7 +363,8 @@ owner runs in the SQL Editor:
 `delete from entries where income_id in (select id from incomes where note = 'تجربة'); delete from incomes where note = 'تجربة';`
 For the test, الاستثمار and السفر were moved to حساب الادخار.
 
-**Phase 5 (home, bucket detail, history) — code complete on `phase-5-home`, not merged yet.**
+**Phase 5 (home, bucket detail, history) — complete, merged to `main`.** The owner reviewed
+the three screens and confirmed they look right.
 
 Done and verified (375px frame, signed in, real Supabase project, example data):
 - Home, top to bottom: account cards with balances from `account_balances` (8,000 and 2,000
