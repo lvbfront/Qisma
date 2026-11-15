@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Design tokens. PROVISIONAL values — see "Design direction" in CLAUDE.md.
+   light-dark() follows the system; data-theme on <html> overrides it. */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#faf8f4, #12110f);
+  --surface: light-dark(#ffffff, #1c1b18);
+  --ink: light-dark(#1b1a17, #f2efe9);
+  --muted: light-dark(#6f6b63, #a19c92);
+  --line: light-dark(#e7e2d9, #2e2c28);
+  --accent: light-dark(#0f6b5c, #4fbfa8);
+  --on-accent: light-dark(#ffffff, #0b1513);
+  --danger: light-dark(#b3372b, #e5766a);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-plex-arabic), system-ui, sans-serif;
+
+  /* 12 / 14 / 16 / 20 come from Tailwind's xs / sm / base / xl */
+  --text-title: 1.75rem;
+  --text-display: 2.5rem;
+
+  --radius-control: 8px;
+  --radius-card: 14px;
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* Every money amount: aligned columns, Western digits. */
+.amount {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

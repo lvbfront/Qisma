@@ -37,9 +37,10 @@ Defined as CSS variables in `app/globals.css` and exposed to Tailwind via
 Theme follows `prefers-color-scheme`; `:root[data-theme="light|dark"]` overrides
 it (manual toggle comes later).
 
-- **Type:** IBM Plex Sans Arabic (400/500/600/700). Scale: 12 / 14 / 16 / 20 / 28 / 40 px.
-  Amounts use the `.amount` class: tabular numerals, Western digits (0-9), `dir="ltr"` isolation.
-- **Radius:** 8px (controls), 14px (cards), full (pills, bar ends).
+- **Type:** IBM Plex Sans Arabic (400/500/600/700). Scale: 12 / 14 / 16 / 20 / 28 / 40 px =
+  `text-xs / sm / base / xl / title / display`.
+  Every amount gets the `.amount` class (tabular numerals) and is produced by `formatAmount`.
+- **Radius:** 8px `rounded-control`, 14px `rounded-card`, full (pills, bar ends).
 - **Spacing:** 4px base grid (Tailwind default scale).
 - **Motion:** 150ms (press/hover), 250ms (layout, bar segments), ease `cubic-bezier(0.2, 0, 0, 1)`.
   Honour `prefers-reduced-motion`. `motion` is for UI animation only, never for logic.
@@ -106,7 +107,7 @@ proxy.ts              Next 16 proxy entry
 ## Commands
 
 ```
-npm run dev      # dev server on :3000
+npm run dev      # dev server on :3000 (next free port if taken)
 npm test         # vitest run
 npm run lint     # eslint
 npm run build    # production build
@@ -117,4 +118,22 @@ Deploy: import the repo in Vercel, set `NEXT_PUBLIC_SUPABASE_URL` and
 
 ## Current status
 
-**Phase 1 (setup) — in progress.** CLAUDE.md written. Nothing else yet.
+**Phase 1 (setup) — code complete, waiting on the owner for two inputs.**
+
+Done and verified:
+- Next.js 16.4 + Tailwind v4 scaffold, `lang="ar" dir="rtl"`, IBM Plex Sans Arabic, logical properties only.
+- Tokens in `app/globals.css` (light/dark via `light-dark()`, `data-theme` override ready for a toggle).
+- `lib/money.ts` + tests (`npm test`: 4 passing).
+- Supabase wiring: `utils/supabase/{client,server,proxy}.ts` + root `proxy.ts`, copied from the
+  official `with-supabase` template (publishable key, `getClaims()`), gate fails closed without env vars.
+- `/login` (email + password, Arabic, no sign-up) and sign-out in settings.
+- App shell: bottom tab bar < md, side rail >= md; four placeholder pages.
+- Checked in headless Chrome at 375px and 1440px, light and dark: RTL, no horizontal scroll.
+  Signed out, every app route 307s to `/login`. `npm run lint` and `npm run build` clean.
+
+Open:
+- **Supabase keys** not provided yet, so `.env.local` does not exist and a real sign-in is untested.
+- **Design direction** section not provided; tokens above are provisional.
+- `motion` is installed but unused so far (nothing to animate yet).
+
+Next: phase 2 (schema + RLS, accounts/buckets/rules, pure allocation function).
