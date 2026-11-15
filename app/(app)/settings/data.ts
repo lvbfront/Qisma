@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { allocate, type Line, type RuleKind } from "@/lib/allocate";
+import type { Segment } from "@/components/split-bar";
+import { allocate, type Allocation, type Line, type RuleKind } from "@/lib/allocate";
 
 export type AccountKind = "current" | "savings" | "investment" | "cash";
 
@@ -65,7 +66,18 @@ export const toLine = (b: Bucket): Line => ({
 export const previewSplit = (buckets: Bucket[], referenceIncome: number) =>
   allocate(referenceIncome, buckets.map(toLine));
 
-/** Classes shared by the settings forms. */
+/** Split-bar segments for a set of allocations: bucket colours, accent for the remainder. */
+export function toSegments(allocations: Allocation[], buckets: Pick<Bucket, "id" | "name" | "color">[]): Segment[] {
+  const byId = new Map(buckets.map((b) => [b.id, b]));
+  return allocations.map((a) => ({
+    id: a.bucketId,
+    label: byId.get(a.bucketId)?.name ?? "",
+    amount: a.amount,
+    color: a.kind === "remainder" ? "remainder" : (byId.get(a.bucketId)?.color ?? 1),
+  }));
+}
+
+/** Classes shared by the forms. */
 export const ui = {
   field:
     "w-full rounded-control border border-hairline bg-surface px-3 py-2.5 text-base outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30",

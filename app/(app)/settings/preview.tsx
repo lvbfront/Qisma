@@ -1,9 +1,9 @@
 "use client";
 
-import { SplitBar, type Segment } from "@/components/split-bar";
+import { SplitBar } from "@/components/split-bar";
 import { amountToPercent } from "@/lib/allocate";
 import { formatAmount, formatPercent } from "@/lib/money";
-import { previewSplit, type Bucket } from "./data";
+import { previewSplit, toSegments, type Bucket } from "./data";
 
 /** Split bar for the reference income plus the "what is left to live on" line and warnings. */
 export function Preview({
@@ -50,13 +50,7 @@ export function Preview({
     );
   }
 
-  const byId = new Map(buckets.map((b) => [b.id, b]));
-  const segments: Segment[] = split.allocations.map((a) => ({
-    id: a.bucketId,
-    label: byId.get(a.bucketId)?.name ?? "",
-    amount: a.amount,
-    color: a.kind === "remainder" ? "remainder" : (byId.get(a.bucketId)?.color ?? 1),
-  }));
+  const segments = toSegments(split.allocations, buckets);
   const remainder = split.allocations[split.allocations.length - 1].amount;
 
   return (

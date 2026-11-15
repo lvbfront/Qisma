@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatNumber, parseAmount } from "@/lib/money";
-import { createClient } from "@/utils/supabase/client";
+import { supabaseBrowser } from "@/utils/supabase/client";
 import { Accounts } from "./accounts";
 import { Buckets } from "./buckets";
 import { errorText, loadSettings, ui, type SettingsData } from "./data";
@@ -11,10 +11,7 @@ const asInput = (halalas: number) => (halalas ? formatNumber(halalas) : "");
 /** Empty means 0; null means the text is not a valid amount. */
 const asAmount = (text: string) => (text.trim() === "" ? 0 : parseAmount(text));
 
-// Created on first use (always in the browser, from an event handler), never while rendering:
-// the client reads the clock, which Next will not allow during prerender.
-let browserClient: ReturnType<typeof createClient> | undefined;
-const supabase = () => (browserClient ??= createClient());
+const supabase = supabaseBrowser;
 
 export function Settings({ initial }: { initial: SettingsData }) {
   const [data, setData] = useState(initial);

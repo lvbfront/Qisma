@@ -98,7 +98,9 @@ app/
     layout.tsx        bottom tab bar (mobile) / side rail (desktop)
     page.tsx          الرئيسية
     investments/      الاستثمار
-    distribute/       توزيع (the primary action)
+    distribute/       توزيع (the primary action): page.tsx (server loader), distribute.tsx
+                      (steps 1-2: amount, preview), transfers.tsx (step 3: checklist at
+                      ?income=<id>), data.ts (checklist + pending queries, grouping)
     subscriptions/    الاشتراكات
     more/             المزيد (mobile only: links to السجل and الإعدادات)
     history/          السجل
@@ -110,7 +112,7 @@ components/           shared UI:
   sheet.tsx           modal on native <dialog>: bottom sheet on mobile, card on desktop
   sortable.tsx        drag-to-reorder list (handle, or arrow keys on the handle)
 lib/                  pure domain logic + tests, no React, no Supabase:
-                      money.ts, allocate.ts, subscriptions.ts, investments.ts
+                      money.ts, dates.ts, allocate.ts, subscriptions.ts, investments.ts
 utils/supabase/       client.ts, server.ts, proxy.ts (session refresh)
 supabase/migrations/  SQL migrations, applied in filename order
 proxy.ts              Next 16 proxy entry
@@ -131,10 +133,12 @@ proxy.ts              Next 16 proxy entry
 - **Reading Supabase in a server component:** put it in an async component inside `<Suspense>`
   and call `await connection()` before `createClient()` (see `settings/page.tsx`). Cache
   Components is on, and the Supabase client reads the clock, which is only allowed at request time.
-- **Browser Supabase client:** create it lazily inside event handlers, never during render
-  (same clock rule). Client-side writes rely on RLS; nothing is trusted from the browser.
+- **Browser Supabase client:** `supabaseBrowser()` from `utils/supabase/client.ts`, called
+  inside event handlers, never during render (same clock rule). Client-side writes rely on RLS; nothing is trusted from the browser.
 - **Percentages** are basis points in data and `formatPercent()` on screen (it is bidi-safe;
   a bare "38%" after Arabic text is drawn as "%38"). A typed percent is read with `parseAmount()`.
+- **Dates** are ISO `YYYY-MM-DD` strings in data and `formatDate()` on screen ("15 نوفمبر 2026");
+  a bare ISO date is reordered by RTL text. "Today" comes from the server in Asia/Riyadh.
 - **Switches** are `<input type="checkbox" role="switch" class="switch">`.
 - **Warning colour** is the `danger` token, for both blocking errors and soft warnings.
 - **Secrets:** `.env.local` is git-ignored; `.env.example` has empty values. Never commit real keys,
@@ -184,7 +188,12 @@ signed-in users only; signed-out callers have no access at all).
   | `record_investment_return` | `return` entry (positive), linked to the investment; several per investment | the entry id |
   | `close_investment` | fixes `result` = total returned - invested (a loss is fine) | none needed: closing twice is rejected |
 
-- `incomes.snapshot` stores the exact lines and rules used, so history survives rule changes.
+- `incomes.snapshot` stores the exact lines and rules used, so history survives rule changes:
+  `{ amount, livingFloor, lines: [Line + name, color, accountId, accountName], allocations }`.
+- **Transfers checklist** is derived, not stored: a distribution's `allocation` entries grouped
+  by the account their bucket lives in. Buckets in the income account need no transfer
+  ("يبقى في الحساب") and are never ticked; a distribution is pending while any entry in another
+  account has `transfer_done = false` (`loadPending`).
 - `buckets.color` is 1..8 and maps to the `bucket-N` design tokens.
 - `buckets.is_investment`: at most one active per user, never the remainder bucket.
 - **Subscriptions:** cycle = `cycle_count` x `cycle_unit` (month | year). `billing_day` (1-31)
@@ -239,12 +248,10 @@ Deploy: import the repo in Vercel, set `NEXT_PUBLIC_SUPABASE_URL` and
 
 Screens, in rough order. None are built yet; every tab is a placeholder.
 
-1. **الإعدادات** — accounts and buckets (rules, priority, colour, account, investment flag),
-   reference income and living floor, with the split bar showing the rules.
-2. **توزيع** — enter amount, live split bar, adjust lines (+ / - or exact figure), confirm,
-   then the list of transfers to make with done-ticks.
+1. ~~**الإعدادات**~~ — done (phase 3).
+2. ~~**توزيع**~~ — done (phase 4).
 3. **الرئيسية** — summary cards: last distribution as a split bar, bucket balances,
-   subscriptions due soon, investment summary.
+   subscriptions due soon, investment summary. (Pending transfers are already there.)
 4. **الاشتراكات** — list by next due date, totals per month and per year, add / edit / pause,
    mark as paid.
 5. **الاستثمار** — available / invested / realised profit, open positions with overdue flags,
@@ -315,4 +322,32 @@ flag or the income account is two statements, not one transaction.
 The real project currently holds the example data from this test (2 accounts, 7 buckets,
 reference income 10,000, living floor 3,000). The owner chose to keep it.
 
-Next: توزيع (enter amount, live split bar, adjust, confirm, transfers list).
+**Phase 4 (توزيع) — code complete on `phase-4-distribute`, not merged yet.**
+
+Done and verified (375px frame, signed in, real Supabase project, example data):
+- Step 1: large amount input (`inputMode="decimal"`), split bar divides live while typing.
+  7,333 gives 1,099 for 15% (rounded down), 3,000 shows the 1,100 shortfall.
+- Step 2: one row per bucket with "ثابت" or its percent; + / − (100 ر.س steps), tap to type an
+  exact figure, switch a row off for this distribution only, reset to the rule; remainder row
+  last in accent and recalculated instantly; living-floor warning; shortfall error disables
+  confirm while rows stay editable. Date (today in Riyadh) and optional note.
+- Confirm calls `confirm_distribution` (first real call of it): **10,000 -> 2,000 / 1,200 /
+  1,500 / 500 / 500 / 500, remainder 3,800, same as the unit test.** A double click recorded
+  one distribution.
+- Step 3 at `/distribute?income=<id>`: "حوّل من الحساب الجاري إلى حساب الادخار 2,000" (الاستثمار
+  1,500 + السفر 500) and "يبقى في الحساب 8,000". Ticking sets `transfer_done`, survives a reload.
+- Home shows the pending distribution with a link back, and clears once everything is ticked.
+- `npm test`: 26 passing. Lint and build clean. No horizontal scroll at 375px.
+
+Not verified:
+- Autofocus and the numeric keypad on a real phone (not observable in the automated frame).
+- These screens at 1440px with data, and in light theme (settings was checked in both).
+- A failed confirm (network error) and its retry with the same id.
+
+The real project now also holds one test distribution (10,000, note "تجربة", 15 Nov 2026, all
+transfers ticked). It is in the immutable ledger: the app cannot delete it. To remove it, the
+owner runs in the SQL Editor:
+`delete from entries where income_id in (select id from incomes where note = 'تجربة'); delete from incomes where note = 'تجربة';`
+For the test, الاستثمار and السفر were moved to حساب الادخار.
+
+Next: الرئيسية (summary cards), then الاشتراكات, الاستثمار, السجل.
