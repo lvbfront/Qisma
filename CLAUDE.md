@@ -1,8 +1,17 @@
 # Qisma (قِسمة)
 
-Personal salary-splitting web app for a single user. When income arrives, the
-user enters the amount; the app splits it across budget buckets by rules, then
+Personal money app for a single user, built around one job: when income arrives,
+the user enters the amount; the app splits it across budget buckets by rules, then
 shows which transfers to make between real bank accounts.
+
+Two things hang off the buckets:
+- **Subscriptions** — recurring payments (monthly, yearly, every N months). The app shows
+  what is due next, what they cost per month and per year, and "mark as paid" records
+  the spend and moves the due date forward.
+- **Investments** — one bucket is the investment bucket; its balance is "available to
+  invest". Money placed with investing apps is tracked per placement (where, how much,
+  when it is expected back, what came back) so the user never loses track of it.
+  Cost basis only: no market prices, no unrealised gains.
 
 ## Design direction
 
@@ -88,13 +97,17 @@ app/
   (app)/              authenticated shell
     layout.tsx        bottom tab bar (mobile) / side rail (desktop)
     page.tsx          الرئيسية
-    distribute/       توزيع
+    investments/      الاستثمار
+    distribute/       توزيع (the primary action)
+    subscriptions/    الاشتراكات
+    more/             المزيد (mobile only: links to السجل and الإعدادات)
     history/          السجل
     settings/         الإعدادات
-components/           shared UI
-lib/                  pure domain logic, no React, no Supabase (money.ts, allocate.ts) + tests
+components/           shared UI (nav.tsx: 5 items on mobile, 6 destinations on desktop)
+lib/                  pure domain logic + tests, no React, no Supabase:
+                      money.ts, allocate.ts, subscriptions.ts, investments.ts
 utils/supabase/       client.ts, server.ts, proxy.ts (session refresh)
-supabase/migrations/  SQL migrations (schema, RLS, views, confirm_distribution)
+supabase/migrations/  SQL migrations, applied in filename order
 proxy.ts              Next 16 proxy entry
 ```
 
@@ -135,22 +148,43 @@ Errors are codes plus data; the UI turns them into Arabic text.
 ## Database
 
 Schema lives in `supabase/migrations/`. Tables: `accounts`, `buckets`, `incomes`, `entries`,
-`settings`. Every table has `user_id` and RLS (own rows only, signed-in users only).
+`settings`, `subscriptions`, `investments`. Every table has `user_id` and RLS (own rows only,
+signed-in users only; signed-out callers have no access at all).
 
-- **No bank account numbers, IBANs or bank credentials anywhere.** An account is just a name.
-- **Balances are never stored.** Read them from the views `bucket_balances` (sum of entries per
-  bucket) and `account_balances` (sum of bucket balances per account).
-- **Immutability is enforced by the database**, not just by convention: the client cannot
-  insert/update/delete `incomes`, cannot update or delete `entries` (except the `transfer_done`
-  flag), and cannot insert `allocation` entries directly.
-- **Confirming a distribution is one call:** `rpc('confirm_distribution', { p_id, p_amount,
-  p_received_on, p_note, p_snapshot, p_allocations })`. It inserts the income and all its
-  allocation entries atomically and rejects allocations that do not sum to the amount.
-  `p_id` is a client-generated uuid, so a double submit fails instead of recording twice.
+- **No bank account numbers, IBANs or bank credentials anywhere.** An account or an
+  investing platform is just a name.
+- **Balances are never stored.** Read them from views: `bucket_balances` (sum of entries per
+  bucket), `account_balances` (sum of bucket balances per account).
+- **Entries are the ledger and are immutable**, enforced by the database: the client cannot
+  update or delete `entries` (except the `transfer_done` flag) and can insert only plain
+  `spend` / `adjustment` / `transfer` entries. `incomes` and `investments` money fields are
+  read-only to the client.
+- **Money movements go through Postgres functions**, each atomic and safe against a double
+  submit (the app generates the id with `crypto.randomUUID()` and a repeat is rejected):
+
+  | Function | Does | App-generated id |
+  |---|---|---|
+  | `confirm_distribution` | income + all its `allocation` entries; must sum to the amount | the income id |
+  | `pay_subscription` | `spend` entry on the linked bucket (if any) + advances `next_due_on` one cycle | the entry id, also kept in `last_payment_id` |
+  | `open_investment` | investment + `invest` entry (negative) on the investment bucket; refuses more than the available balance | the investment id |
+  | `record_investment_return` | `return` entry (positive), linked to the investment; several per investment | the entry id |
+  | `close_investment` | fixes `result` = total returned - invested (a loss is fine) | none needed: closing twice is rejected |
+
 - `incomes.snapshot` stores the exact lines and rules used, so history survives rule changes.
 - `buckets.color` is 1..8 and maps to the `bucket-N` design tokens.
+- `buckets.is_investment`: at most one active per user, never the remainder bucket.
+- **Subscriptions:** cycle = `cycle_count` x `cycle_unit` (month | year). `billing_day` (1-31)
+  is the original day of the month; `next_due_on` is always that day or the last day of a
+  shorter month (a check constraint enforces it), so dates never drift. When the app changes
+  `next_due_on` it must set `billing_day` to match (`billingDayOf`). Deleting a subscription
+  keeps its payment entries. Monthly/yearly costs are derived in `lib/subscriptions.ts`.
+- **Investments:** `investment_positions` (per investment: invested, returned, outstanding,
+  result, days to expected return, overdue) and `investment_summary` (available, currently
+  invested, realised profit). `result` is null until closed. A closed investment accepts no
+  more returns. Dates in these views use "today" in Asia/Riyadh.
 - Applying migrations: paste the file into the Supabase dashboard SQL Editor and run it
   (no database password needed). New changes go in a NEW migration file; never edit an applied one.
+- Every migration is first tested on a throwaway local Postgres with a stubbed `auth` schema.
 
 ## Domain glossary
 
@@ -160,8 +194,20 @@ Schema lives in `supabase/migrations/`. Tables: `accounts`, `buckets`, `incomes`
   `fixed` (a set amount), `percent` (a share of the income), `remainder` (whatever is left).
 - **Income** (دخل) — one arrival of money (e.g. a salary) with an amount and date.
 - **Distribution** (توزيع) — the confirmed split of one income across buckets. Immutable.
-- **Entry** (قيد) — one line in the ledger: an amount moved into/out of a bucket, either
-  from a distribution or as a correcting adjustment.
+- **Entry** (قيد) — one line in the ledger: a signed amount into (+) or out of (-) a bucket.
+  Kinds: `allocation`, `spend`, `adjustment`, `transfer`, `invest`, `return`.
+- **Subscription** (اشتراك) — a recurring payment: name, amount, billing cycle, next due date,
+  optionally the bucket it is paid from. Can be paused.
+- **Billing cycle** — an interval count plus a unit (month or year): monthly, yearly, every 3 months.
+- **Monthly equivalent** — a subscription's cost spread per month (yearly 1,200 = 100 a month). Derived.
+- **Investment bucket** — the one bucket whose balance means "available to invest".
+- **Investment** (استثمار) — one placement of money with a platform: amount invested, date,
+  optional expected return date and expected profit, status `open` or `closed`.
+- **Platform** (منصة) — the investing app the money sits in. Just a name.
+- **Return** (عائد) — money coming back from an investment into the investment bucket.
+- **Outstanding** — invested minus returned so far, never below zero; what is still out there.
+- **Result** — total returned minus amount invested, fixed when the investment is closed
+  (positive = profit, negative = loss).
 
 ## Commands
 
@@ -175,30 +221,47 @@ npm run build    # production build
 Deploy: import the repo in Vercel, set `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in project env vars; pushes to `main` deploy.
 
+## Backlog
+
+Screens, in rough order. None are built yet; every tab is a placeholder.
+
+1. **الإعدادات** — accounts and buckets (rules, priority, colour, account, investment flag),
+   reference income and living floor, with the split bar showing the rules.
+2. **توزيع** — enter amount, live split bar, adjust lines (+ / - or exact figure), confirm,
+   then the list of transfers to make with done-ticks.
+3. **الرئيسية** — summary cards: last distribution as a split bar, bucket balances,
+   subscriptions due soon, investment summary.
+4. **الاشتراكات** — list by next due date, totals per month and per year, add / edit / pause,
+   mark as paid.
+5. **الاستثمار** — available / invested / realised profit, open positions with overdue flags,
+   place money, record a return, close.
+6. **السجل** — entries and past distributions (from the stored snapshots), add spend / adjustment.
+7. Manual light/dark toggle, `motion` for the split bar, deploy to Vercel.
+
 ## Current status
 
 **Phase 1 (setup) — complete, merged to `main`.** Scaffold, tokens, money helper, Supabase auth
 (sign-in/sign-out verified live), app shell. Not deployed to Vercel yet.
 
-**Phase 2 (engine) — complete, merged to `main`.**
+**Phase 2 (engine) — complete, merged to `main`.** `lib/allocate.ts`, first migration applied
+to the real project and probed signed-out (everything denied).
+
+**Phase 2.5 (scope: subscriptions + investments) — code complete on `phase-2-5-scope`;
+the second migration is NOT yet applied to the real Supabase project (waiting for the owner).**
 
 Done and verified:
-- `lib/allocate.ts` (+ `percentToAmount`, `amountToPercent`) with 9 tests, including the
-  10,000 SAR example and a 5,000-case property test. `npm test`: 13 passing.
-- `supabase/migrations/20261115120000_schema.sql`: 5 tables, RLS, 2 balance views,
-  `confirm_distribution()`. **Applied to the real Supabase project** (owner ran it in the SQL
-  Editor; all 5 tables report `rowsecurity = true`).
-- Signed-out probe of the real project with the publishable key: every table, both views, an
-  insert and the function all return `42501 permission denied`.
-- User isolation, atomic rollback, double-submit rejection, immutability and balances were
-  checked on a throwaway local Postgres 16 with a stubbed `auth` schema.
+- `lib/subscriptions.ts` and `lib/investments.ts` with tests (month-end dates, yearly cycles,
+  29 Feb, partial returns, loss, profit, overdue). `npm test`: 24 passing.
+- `supabase/migrations/20261115150000_subscriptions_investments.sql`: 2 tables, `is_investment`,
+  2 entry kinds + links, 4 functions, 2 views. Applied on top of the first migration on a
+  throwaway local Postgres 16 and checked there: user isolation, signed-out denied, double
+  submit rejected, 31 Jan -> 28 Feb -> 31 Mar, over-investing refused, loss closable,
+  immutability, deleting a subscription keeps its history.
+- Navigation: 5 items on mobile (توزيع in the centre as the primary action, المزيد holding
+  السجل and الإعدادات), 6 destinations on the desktop rail, 3 new placeholder pages.
+  Checked at 375px and 1440px, light and dark: RTL, no horizontal scroll. Lint and build clean.
 
 Not verified yet:
-- The signed-in path against the real project (reading/writing own rows, calling
-  `confirm_distribution`). It gets exercised when phase 3 wires the UI to the tables.
-
-Not done yet:
-- Nothing in the UI uses the engine or the tables yet.
-- `motion` unused; manual theme toggle; Vercel deploy.
-
-Next: phase 3 (settings UI for accounts and buckets, the split bar, distribution preview and confirm).
+- The second migration on the real project.
+- The signed-in path against the real project (own rows, calling the functions). It gets
+  exercised when the screens are wired to the tables.
