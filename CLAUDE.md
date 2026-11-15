@@ -403,7 +403,8 @@ Test data now in the real project's ledger (immutable from the app): the 10,000 
 To wipe ALL ledger test data, the owner runs in the SQL Editor:
 `delete from entries; delete from incomes;`
 
-**Phase 6 (الاشتراكات) — code complete on `phase-6-subscriptions`, not merged yet.**
+**Phase 6 (الاشتراكات) — complete, merged to `main`.** The owner reviewed the screen and
+confirmed it looks right.
 
 Done and verified (375px frame, signed in, real Supabase project, example values 30 monthly,
 400 yearly, 90 quarterly paused):
