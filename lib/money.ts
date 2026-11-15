@@ -30,6 +30,13 @@ export function formatNumber(halalas: number): string {
 export const formatAmount = (halalas: number): string => formatNumber(halalas) + " ر.س";
 
 /**
+ * Like formatAmount, with an explicit "+" on gains: "+500 ر.س", "-200 ر.س", "0 ر.س".
+ * The sign and digits sit in an LTR isolate; in RTL text a bare "+50" is drawn as "50+".
+ */
+export const formatSigned = (halalas: number): string =>
+  halalas > 0 ? `\u2066+${formatNumber(halalas)}\u2069 ر.س` : formatAmount(halalas);
+
+/**
  * Basis points as "20%" or "12.5%".
  * Wrapped in an LTR isolate: after Arabic letters a bare "38%" is drawn as "%38".
  */

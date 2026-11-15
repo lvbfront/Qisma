@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useState } from "react";
 import { Sheet } from "@/components/sheet";
 import { SortableList } from "@/components/sortable";
-import { bucketBg } from "@/components/split-bar";
+import { bucketBg } from "@/components/bucket-color";
 import { amountToPercent, percentToAmount, type RuleKind } from "@/lib/allocate";
 import { formatAmount, formatNumber, formatPercent, parseAmount } from "@/lib/money";
 import { previewSplit, ui, type Account, type Bucket } from "./data";

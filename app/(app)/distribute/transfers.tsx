@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { bucketBg, SplitBar } from "@/components/split-bar";
+import { bucketBg } from "@/components/bucket-color";
+import { SplitBar } from "@/components/split-bar";
 import { formatDate } from "@/lib/dates";
 import { formatAmount } from "@/lib/money";
 import { supabaseBrowser } from "@/utils/supabase/client";

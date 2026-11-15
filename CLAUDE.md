@@ -96,19 +96,22 @@ app/
   login/              sign-in page + server action (no sign-up)
   (app)/              authenticated shell
     layout.tsx        bottom tab bar (mobile) / side rail (desktop)
-    page.tsx          الرئيسية
+    page.tsx          الرئيسية: accounts, pending transfers, last distribution, buckets,
+                      and two marked SLOTs (subscriptions, investments) for later prompts
+    buckets/[id]/     bucket detail: balance, entries, actions.tsx (تسجيل صرف, تعديل الرصيد)
     investments/      الاستثمار
     distribute/       توزيع (the primary action): page.tsx (server loader), distribute.tsx
                       (steps 1-2: amount, preview), transfers.tsx (step 3: checklist at
                       ?income=<id>), data.ts (checklist + pending queries, grouping)
     subscriptions/    الاشتراكات
     more/             المزيد (mobile only: links to السجل and الإعدادات)
-    history/          السجل
+    history/          السجل: incomes with their split; snapshot.ts reads incomes.snapshot
     settings/         الإعدادات: page.tsx (server loader), settings.tsx (amounts), accounts.tsx,
                       buckets.tsx (list + editor), preview.tsx, data.ts (types, queries), use-writes.ts
 components/           shared UI:
   nav.tsx             5 items on mobile, 6 destinations on desktop
-  split-bar.tsx       THE split bar (+ bucketBg for colour dots). Reuse it; never re-draw it.
+  split-bar.tsx       THE split bar. Reuse it; never re-draw it.
+  bucket-color.ts     bucketBg() for segments and colour dots (plain module: server + client)
   sheet.tsx           modal on native <dialog>: bottom sheet on mobile, card on desktop
   sortable.tsx        drag-to-reorder list (handle, or arrow keys on the handle)
 lib/                  pure domain logic + tests, no React, no Supabase:
@@ -139,6 +142,17 @@ proxy.ts              Next 16 proxy entry
   a bare "38%" after Arabic text is drawn as "%38"). A typed percent is read with `parseAmount()`.
 - **Dates** are ISO `YYYY-MM-DD` strings in data and `formatDate()` on screen ("15 نوفمبر 2026");
   a bare ISO date is reordered by RTL text. "Today" comes from the server in Asia/Riyadh.
+- **Signed amounts** (ledger entries) use `formatSigned()`: "+500 ر.س" / "-200 ر.س". A bare
+  "+50" in RTL text is drawn as "50+".
+- **Functions called from server components** must live in a plain module, not in a
+  `"use client"` file (that is why `bucketBg` is in `bucket-color.ts`). The build does not
+  catch this on dynamic pages; only loading the page does.
+- **`usePathname()` and other URL reads in client components** go behind `<Suspense>` (see
+  `nav.tsx`), or dynamic routes fail to build.
+- **Manual changes to a bucket only add entries:** a spend is a negative `spend` entry; setting
+  the balance records an `adjustment` entry for the difference. Each form generates its entry id
+  once, so a double submit is rejected by the primary key.
+- **Empty states:** every screen has one, and it names the single next action with a button.
 - **Switches** are `<input type="checkbox" role="switch" class="switch">`.
 - **Warning colour** is the `danger` token, for both blocking errors and soft warnings.
 - **Secrets:** `.env.local` is git-ignored; `.env.example` has empty values. Never commit real keys,
@@ -250,13 +264,12 @@ Screens, in rough order. None are built yet; every tab is a placeholder.
 
 1. ~~**الإعدادات**~~ — done (phase 3).
 2. ~~**توزيع**~~ — done (phase 4).
-3. **الرئيسية** — summary cards: last distribution as a split bar, bucket balances,
-   subscriptions due soon, investment summary. (Pending transfers are already there.)
+3. ~~**الرئيسية**~~, bucket detail and ~~**السجل**~~ — done (phase 5). Home still has two
+   empty SLOTs, filled by items 4 and 5.
 4. **الاشتراكات** — list by next due date, totals per month and per year, add / edit / pause,
    mark as paid.
 5. **الاستثمار** — available / invested / realised profit, open positions with overdue flags,
    place money, record a return, close.
-6. **السجل** — entries and past distributions (from the stored snapshots), add spend / adjustment.
 7. Manual light/dark toggle, `motion` for the split bar, deploy to Vercel.
 
 ## Current status
@@ -350,4 +363,30 @@ owner runs in the SQL Editor:
 `delete from entries where income_id in (select id from incomes where note = 'تجربة'); delete from incomes where note = 'تجربة';`
 For the test, الاستثمار and السفر were moved to حساب الادخار.
 
-Next: الرئيسية (summary cards), then الاشتراكات, الاستثمار, السجل.
+**Phase 5 (home, bucket detail, history) — code complete on `phase-5-home`, not merged yet.**
+
+Done and verified (375px frame, signed in, real Supabase project, example data):
+- Home, top to bottom: account cards with balances from `account_balances` (8,000 and 2,000
+  after the test distribution), pending-transfers banner (only when unfinished), last
+  distribution (date, amount, split bar from the snapshot), bucket cards with balances from
+  `bucket_balances`, then the two marked slots.
+- Bucket detail (`/buckets/<id>`): balance, entries newest first, "تسجيل صرف" (200 from الصدقة:
+  500 -> 300, one entry despite a double click) and "تعديل الرصيد" (set to 350: records +50).
+  Home balances follow (الحساب الجاري 7,850).
+- History: the income expands to its full split with rule labels and accounts, read from the
+  stored snapshot, with a link to its transfers checklist.
+- `npm test`: 27 passing. Lint and build clean. No horizontal scroll at 375px.
+
+Not verified:
+- **The empty states.** The project already has data, so the brand-new-user cards (home: no
+  accounts / no buckets / no distribution; history: no income; bucket: no entries; unknown
+  bucket or distribution) were written but never seen rendered.
+- These screens at 1440px and in light theme.
+- الاستثمار and الاشتراكات are still "قريبًا" placeholders (prompts 6 and 7).
+
+Test data now in the real project's ledger (immutable from the app): the 10,000 distribution
+(note "تجربة"), plus on الصدقة a spend of 200 (note "تجربة صرف") and an adjustment of +50.
+To wipe ALL ledger test data, the owner runs in the SQL Editor:
+`delete from entries; delete from incomes;`
+
+Next: الاشتراكات (prompt 6), then الاستثمار (prompt 7).

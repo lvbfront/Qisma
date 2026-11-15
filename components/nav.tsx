@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 // Icons are single 24x24 stroke paths.
 // on: "both" = mobile bar and desktop rail, "mobile" / "desktop" = only there.
@@ -29,9 +30,24 @@ const items = [
 const under = (pathname: string, href: string) =>
   href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
-/** Bottom tab bar on mobile, side rail (inline-start) from md up. */
+/**
+ * Bottom tab bar on mobile, side rail (inline-start) from md up.
+ * The current path is unknown while a dynamic route (/buckets/[id]) is prerendered, so the
+ * part that reads it sits behind a boundary; until then the bar shows with nothing highlighted.
+ */
 export function Nav() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<NavBar pathname="" />}>
+      <CurrentNav />
+    </Suspense>
+  );
+}
+
+function CurrentNav() {
+  return <NavBar pathname={usePathname()} />;
+}
+
+function NavBar({ pathname }: { pathname: string }) {
   return (
     <nav
       aria-label="التنقل الرئيسي"

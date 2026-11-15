@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { bucketBg, SplitBar } from "@/components/split-bar";
+import { bucketBg } from "@/components/bucket-color";
+import { SplitBar } from "@/components/split-bar";
 import { allocate, percentToAmount, type Line } from "@/lib/allocate";
 import { formatAmount, formatNumber, formatPercent, parseAmount } from "@/lib/money";
 import { supabaseBrowser } from "@/utils/supabase/client";

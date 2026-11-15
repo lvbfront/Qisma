@@ -2,31 +2,15 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { formatAmount } from "@/lib/money";
+import { bucketBg, type BucketColor } from "./bucket-color";
 
 export type Segment = {
   id: string;
   label: string;
   /** halalas */
   amount: number;
-  /** 1-8 = bucket colour token; "remainder" = the accent colour */
-  color: number | "remainder";
+  color: BucketColor;
 };
-
-// Full class names so Tailwind can see them.
-const BUCKET_BG = [
-  "bg-bucket-1",
-  "bg-bucket-2",
-  "bg-bucket-3",
-  "bg-bucket-4",
-  "bg-bucket-5",
-  "bg-bucket-6",
-  "bg-bucket-7",
-  "bg-bucket-8",
-];
-
-/** Background class for a bucket colour (also used for the dot next to a bucket name). */
-export const bucketBg = (color: Segment["color"]) =>
-  color === "remainder" ? "bg-accent" : (BUCKET_BG[color - 1] ?? BUCKET_BG[0]);
 
 /**
  * The split bar: one amount divided into coloured segments, in the order given.
