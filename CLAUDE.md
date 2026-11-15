@@ -322,7 +322,7 @@ flag or the income account is two statements, not one transaction.
 The real project currently holds the example data from this test (2 accounts, 7 buckets,
 reference income 10,000, living floor 3,000). The owner chose to keep it.
 
-**Phase 4 (توزيع) — code complete on `phase-4-distribute`, not merged yet.**
+**Phase 4 (توزيع) — complete, merged to `main`.**
 
 Done and verified (375px frame, signed in, real Supabase project, example data):
 - Step 1: large amount input (`inputMode="decimal"`), split bar divides live while typing.
@@ -337,10 +337,10 @@ Done and verified (375px frame, signed in, real Supabase project, example data):
 - Step 3 at `/distribute?income=<id>`: "حوّل من الحساب الجاري إلى حساب الادخار 2,000" (الاستثمار
   1,500 + السفر 500) and "يبقى في الحساب 8,000". Ticking sets `transfer_done`, survives a reload.
 - Home shows the pending distribution with a link back, and clears once everything is ticked.
+- Autofocus and the numeric keypad confirmed by the owner on a phone.
 - `npm test`: 26 passing. Lint and build clean. No horizontal scroll at 375px.
 
 Not verified:
-- Autofocus and the numeric keypad on a real phone (not observable in the automated frame).
 - These screens at 1440px with data, and in light theme (settings was checked in both).
 - A failed confirm (network error) and its retry with the same id.
 
