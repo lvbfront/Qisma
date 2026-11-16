@@ -215,6 +215,7 @@ signed-in users only; signed-out callers have no access at all).
   | `open_investment` | investment + `invest` entry (negative) on the investment bucket; refuses more than the available balance | the investment id |
   | `record_investment_return` | `return` entry (positive), linked to the investment; several per investment | the entry id |
   | `close_investment` | fixes `result` = total returned - invested (a loss is fine) | none needed: closing twice is rejected |
+  | `reopen_investment` | undoes a close made by mistake: back to `open`, `result` and `closed_on` cleared; entries untouched | none needed: only a closed one can be reopened |
 
 - `incomes.snapshot` stores the exact lines and rules used, so history survives rule changes:
   `{ amount, livingFloor, lines: [Line + name, color, accountId, accountName], allocations }`.
@@ -438,7 +439,8 @@ Test data added to the real project: three subscriptions ("اشتراك شهري
 "اشتراك فصلي"; deletable from their edit sheets) and, in the ledger, a 30 spend and a +30
 adjustment on القسط from the pay/undo test.
 
-**Phase 7 (الاستثمار) — code complete on `phase-7-investments`, not merged yet.**
+**Phase 7 (الاستثمار) — complete, merged to `main`.** The owner reviewed the screen and
+confirmed it looks right.
 
 Done and verified (375px frame, signed in, real Supabase project, example values):
 - Three figures from `investment_summary` and the thin available/invested bar (accent / muted).
@@ -466,11 +468,19 @@ Not verified:
 - A failed call (network error) and its retry.
 - 1440px and light theme.
 
-Not built (not asked for): editing an investment's platform, title or expectation after it is
-opened; reopening a closed investment.
+Added after review, and verified live:
+- "تعديل" on an open investment: platform, title, expected date and expected profit. The sheet
+  shows the amount as text and has no amount field; the database refuses any other column.
+- "إعادة فتح" on a closed investment, with a confirmation. Needs
+  `supabase/migrations/20261116100000_reopen_investment.sql`, **applied to the real project**
+  by the owner; tested first on the local Postgres (reopen, return, close again, other user and
+  signed-out caller refused), and the signed-out probe of the real project returns
+  `permission denied`. Reopening the written-off test investment moved الربح المحقق from -60 to
+  +40 and مستثمر حالياً from 300 to 400; a double tap changed nothing further.
 
-Test data added to the real project: three investments ("تجربة أولى" closed +40, "تجربة خسارة"
-closed -100, "تجربة متأخرة" open and overdue) and their `invest` / `return` entries on the
+Test data added to the real project: three investments ("تجربة أولى" closed +40; "تجربة خسارة",
+written off then reopened, now open; "تجربة متأخرة", renamed "تجربة معدّلة" on "منصة ج", open and
+overdue) and their `invest` / `return` entries on the
 الاستثمار bucket. From the app these are permanent. To wipe ALL test money data the owner runs
 in the SQL Editor: `delete from entries; delete from investments; delete from incomes;`
 
