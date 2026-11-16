@@ -8,7 +8,7 @@ import { SplitBar } from "@/components/split-bar";
 import { amountToPercent } from "@/lib/allocate";
 import { daysBetween, daysLabel, formatDate } from "@/lib/dates";
 import { groupByPlatform } from "@/lib/investments";
-import { formatAmount, formatPercent, formatSigned, parseAmount } from "@/lib/money";
+import { formatAmount, formatNumber, formatPercent, formatSigned, parseAmount } from "@/lib/money";
 import { dueLabel } from "@/lib/subscriptions";
 import { supabaseBrowser } from "@/utils/supabase/client";
 import { ui } from "../settings/data";
@@ -22,7 +22,11 @@ type Mode =
   | { kind: "receive"; position: Position }
   /** After a return was saved: "is this investment finished?" */
   | { kind: "finished?"; position: Position; returned: number; on: string }
-  | { kind: "close"; position: Position };
+  | { kind: "close"; position: Position }
+  /** Descriptive fields only; the amount can never be edited. */
+  | { kind: "edit"; position: Position }
+  /** A closed investment that should not have been closed. */
+  | { kind: "reopen"; position: Position };
 
 const blankForm = (today: string) => ({ platform: "", title: "", amount: "", date: today, expectedOn: "", expectedProfit: "" });
 
@@ -48,7 +52,17 @@ export function Investments({ data, today }: { data: InvestmentsData; today: str
 
   const start = (next: Mode) => {
     requestId.current = null;
-    setForm(blankForm(today));
+    setForm(
+      next.kind === "edit"
+        ? {
+            ...blankForm(today),
+            platform: next.position.platform,
+            title: next.position.title ?? "",
+            expectedOn: next.position.expectedReturnOn ?? "",
+            expectedProfit: next.position.expectedProfit ? formatNumber(next.position.expectedProfit) : "",
+          }
+        : blankForm(today),
+    );
     setFailure(null);
     setMode(next);
   };
@@ -110,6 +124,31 @@ export function Investments({ data, today }: { data: InvestmentsData; today: str
 
   async function close(position: Position, on: string) {
     const ok = await call("close_investment", { p_investment_id: position.id, p_closed_on: on }, "تعذّر إغلاق الاستثمار.");
+    if (ok) setMode(null);
+  }
+
+  /** Platform, title and expectation only. The database refuses any other column. */
+  async function saveEdit(position: Position) {
+    if (!form.platform.trim() || (form.expectedProfit.trim() !== "" && expectedProfit === null)) return;
+    setBusy(true);
+    setFailure(null);
+    const { error } = await supabaseBrowser()
+      .from("investments")
+      .update({
+        platform: form.platform.trim(),
+        title: form.title.trim() || null,
+        expected_return_on: form.expectedOn || null,
+        expected_profit: expectedProfit,
+      })
+      .eq("id", position.id);
+    setBusy(false);
+    if (error) return setFailure("تعذّر حفظ التعديل. لم يتغيّر شيء.");
+    setMode(null);
+    router.refresh();
+  }
+
+  async function reopen(position: Position) {
+    const ok = await call("reopen_investment", { p_investment_id: position.id }, "تعذّر إعادة فتح الاستثمار.");
     if (ok) setMode(null);
   }
 
@@ -231,6 +270,14 @@ export function Investments({ data, today }: { data: InvestmentsData; today: str
                       <span className="min-w-0 truncate font-medium">{titleOf(p)}</span>
                       <span className="amount shrink-0 font-semibold">{formatAmount(p.invested)}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => start({ kind: "edit", position: p })}
+                      aria-label={`تعديل ${titleOf(p)}`}
+                      className="-ms-1 mt-0.5 px-1 py-1 text-label font-semibold text-accent"
+                    >
+                      تعديل
+                    </button>
                     <p className="amount mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-label text-muted">
                       {daysLeft === null ? (
                         <span>بلا موعد متوقع</span>
@@ -293,6 +340,14 @@ export function Investments({ data, today }: { data: InvestmentsData; today: str
                     استُثمر {formatAmount(p.invested)} · عاد {formatAmount(p.returned)} · المدة{" "}
                     {daysLabel(daysBetween(p.investedOn, p.closedOn ?? p.investedOn))}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => start({ kind: "reopen", position: p })}
+                    aria-label={`إعادة فتح ${titleOf(p)}`}
+                    className="-ms-1 mt-1 px-1 py-1 text-label font-semibold text-accent"
+                  >
+                    إعادة فتح
+                  </button>
                 </li>
               );
             })}
@@ -310,7 +365,11 @@ export function Investments({ data, today }: { data: InvestmentsData; today: str
               ? "استلمت مبلغ"
               : mode?.kind === "finished?"
                 ? "هل انتهى هذا الاستثمار؟"
-                : "إغلاق الاستثمار"
+                : mode?.kind === "edit"
+                  ? "تعديل الاستثمار"
+                  : mode?.kind === "reopen"
+                    ? "إعادة فتح الاستثمار"
+                    : "إغلاق الاستثمار"
         }
       >
         {mode?.kind === "new" && (
@@ -361,6 +420,70 @@ export function Investments({ data, today }: { data: InvestmentsData; today: str
               تسجيل الاستثمار
             </button>
           </form>
+        )}
+
+        {mode?.kind === "edit" && (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveEdit(mode.position);
+            }}
+          >
+            <p className="amount text-label text-muted">
+              المبلغ المستثمَر {formatAmount(mode.position.invested)} بتاريخ {formatDate(mode.position.investedOn)}. المبلغ لا
+              يُعدَّل.
+            </p>
+            <label className={ui.label}>
+              المنصة
+              <input
+                value={form.platform}
+                onChange={(e) => set({ platform: e.target.value })}
+                list="platforms-edit"
+                required
+                maxLength={60}
+                autoComplete="off"
+                className={`${ui.field} mt-1.5`}
+              />
+              <datalist id="platforms-edit">
+                {platforms.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </label>
+            <label className={ui.label}>
+              العنوان أو ملاحظة (اختياري)
+              <input value={form.title} onChange={(e) => set({ title: e.target.value })} maxLength={200} className={`${ui.field} mt-1.5`} />
+            </label>
+            {dateField("تاريخ العودة المتوقع (اختياري)", form.expectedOn, (v) => set({ expectedOn: v }))}
+            {amountField("الربح المتوقع (اختياري)", form.expectedProfit, (v) => set({ expectedProfit: v }))}
+            {failureLine}
+            <button
+              disabled={busy || !form.platform.trim() || (form.expectedProfit.trim() !== "" && expectedProfit === null)}
+              className={ui.primary}
+            >
+              حفظ
+            </button>
+          </form>
+        )}
+
+        {mode?.kind === "reopen" && (
+          <div className="flex flex-col gap-4">
+            <p className="amount text-label text-muted">
+              {titleOf(mode.position)} · {mode.position.platform}. أُغلق بنتيجة {formatSigned(mode.position.result ?? 0)}.
+            </p>
+            <p className="text-label text-muted">
+              إعادة الفتح تُلغي النتيجة المثبتة وتعيده إلى الاستثمارات القائمة. المبالغ المسجَّلة عليه تبقى كما هي، ويمكنك
+              تسجيل مبالغ أخرى ثم إغلاقه من جديد.
+            </p>
+            {failureLine}
+            <button type="button" disabled={busy} onClick={() => reopen(mode.position)} className={ui.primary}>
+              نعم، أعد فتحه
+            </button>
+            <button type="button" disabled={busy} onClick={() => setMode(null)} className={ui.secondary}>
+              تراجع
+            </button>
+          </div>
         )}
 
         {mode?.kind === "receive" && (
