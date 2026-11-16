@@ -165,7 +165,7 @@ export function Subscriptions({
     const cycle = cycleOf(s);
     const daysLeft = daysBetween(today, s.next_due_on);
     return (
-      <li key={s.id} className={`flex items-stretch ${s.paused ? "opacity-55" : ""}`}>
+      <li key={s.id} className={`flex items-stretch ${s.paused ? "dimmed" : ""}`}>
         <button type="button" onClick={() => openEdit(s)} className="min-w-0 flex-1 p-4 text-start">
           <span className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate font-medium">{s.name}</span>

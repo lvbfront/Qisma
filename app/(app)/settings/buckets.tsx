@@ -187,7 +187,7 @@ export function Buckets({
               <button
                 type="button"
                 onClick={() => openEdit(b)}
-                className={`flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 pe-4 text-start ${b.active ? "" : "opacity-55"}`}
+                className={`flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 pe-4 text-start ${b.active ? "" : "dimmed"}`}
               >
                 <span
                   aria-hidden

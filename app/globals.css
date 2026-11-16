@@ -124,3 +124,18 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Keyboard focus is always visible, on every control, in both themes.
+   In the base layer so a component can replace it with its own ring (the inputs do). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* A paused / switched-off row: quiet, but still readable (muted passes AA; opacity would not). */
+.dimmed,
+.dimmed * {
+  color: var(--muted);
+}

@@ -204,7 +204,7 @@ async function Home() {
                 <li key={b.id}>
                   <Link
                     href={`/buckets/${b.id}`}
-                    className={`block rounded-card border border-hairline bg-surface p-4 ${b.active ? "" : "opacity-55"}`}
+                    className={`block rounded-card border border-hairline bg-surface p-4 ${b.active ? "" : "dimmed"}`}
                   >
                     <span className="flex items-center gap-2">
                       <span

@@ -1,6 +1,6 @@
 "use client";
 
-import { Reorder, useDragControls } from "motion/react";
+import { MotionConfig, Reorder, useDragControls } from "motion/react";
 
 /**
  * Drag-to-reorder list. Drag by the handle (touch or mouse), or focus the handle
@@ -28,18 +28,26 @@ export function SortableList<T extends { id: string }>({
   };
 
   return (
-    <Reorder.Group
-      axis="y"
-      values={items}
-      onReorder={onReorder}
-      className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-surface"
-    >
-      {items.map((item, index) => (
-        <Row key={item.id} item={item} onDrop={() => onCommit(items)} onMove={(delta) => move(index, delta)}>
-          {children(item)}
-        </Row>
-      ))}
-    </Reorder.Group>
+    // reducedMotion="user": with "reduce motion" on, rows jump to their place instead of sliding.
+    <MotionConfig reducedMotion="user">
+      <Reorder.Group
+        axis="y"
+        values={items}
+        onReorder={onReorder}
+        className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-surface"
+      >
+        {items.map((item, index) => (
+          <Row
+            key={item.id}
+            item={item}
+            onDrop={() => onCommit(items)}
+            onMove={(delta) => move(index, delta)}
+          >
+            {children(item)}
+          </Row>
+        ))}
+      </Reorder.Group>
+    </MotionConfig>
   );
 }
 
@@ -75,7 +83,12 @@ function Row<T>({
         }}
         className="grid size-11 shrink-0 cursor-grab touch-none place-items-center text-muted active:cursor-grabbing"
       >
-        <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden>
+        <svg
+          viewBox="0 0 24 24"
+          className="size-5"
+          fill="currentColor"
+          aria-hidden
+        >
           <circle cx="9" cy="6" r="1.5" />
           <circle cx="15" cy="6" r="1.5" />
           <circle cx="9" cy="12" r="1.5" />

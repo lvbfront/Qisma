@@ -71,7 +71,7 @@ async function Incomes() {
                     <SplitBar segments={snapshotSegments(rows)} />
                     <ul className="mt-4 flex flex-col gap-3">
                       {rows.map((row) => (
-                        <li key={row.bucketId} className={`flex items-center gap-3 ${row.off ? "opacity-55" : ""}`}>
+                        <li key={row.bucketId} className={`flex items-center gap-3 ${row.off ? "dimmed" : ""}`}>
                           <span aria-hidden className={`size-3 shrink-0 rounded-full ${bucketBg(row.color)}`} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate font-medium">{row.name}</span>

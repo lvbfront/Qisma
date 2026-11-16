@@ -2,8 +2,10 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { signOut } from "@/app/login/actions";
 import { createClient } from "@/utils/supabase/server";
-import { loadSettings } from "./data";
+import { loadSettings, ui } from "./data";
+import { ExportButton } from "./export-button";
 import { Settings } from "./settings";
+import { ThemeToggle } from "./theme-toggle";
 
 export default function Page() {
   return (
@@ -13,7 +15,16 @@ export default function Page() {
       <Suspense fallback={<p className="mt-6 text-muted">جارٍ التحميل…</p>}>
         <Loader />
       </Suspense>
-      <form action={signOut} className="mt-12">
+      <section aria-labelledby="app-title" className="mt-10">
+        <h2 id="app-title" className="text-heading font-bold">
+          التطبيق
+        </h2>
+        <div className={`${ui.card} mt-4 flex flex-col gap-5`}>
+          <ThemeToggle />
+          <ExportButton />
+        </div>
+      </section>
+      <form action={signOut} className="mt-8">
         <button className="rounded-control border border-hairline bg-surface px-4 py-2.5 text-label font-medium text-danger">
           تسجيل الخروج
         </button>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { bucketBg } from "@/components/bucket-color";
 import { SplitBar } from "@/components/split-bar";
 import { allocate, percentToAmount, type Line } from "@/lib/allocate";
@@ -37,6 +37,12 @@ export function Distribute({
   const [failure, setFailure] = useState<string | null>(null);
   // One id per distribution: a second submit of the same one is rejected by the database.
   const incomeId = useRef<string | null>(null);
+
+  // Keyboard and screen-reader users land on the new step, not on a button that just disappeared.
+  const previewHeading = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (step === "preview") previewHeading.current?.focus();
+  }, [step]);
 
   const amount = parseAmount(text);
   const lines: Line[] = buckets.map((b) => ({
@@ -174,7 +180,7 @@ export function Distribute({
             dir="ltr"
             placeholder="0"
             aria-invalid={text.trim() !== "" && amount === null}
-            className="amount w-full rounded-card border border-hairline bg-surface py-5 ps-4 pe-16 text-end text-display font-bold outline-none placeholder:text-hairline focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
+            className="amount w-full rounded-card border border-hairline bg-surface py-5 ps-4 pe-16 text-end text-display font-bold outline-none placeholder:text-muted focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
           />
           <span className="pointer-events-none absolute inset-y-0 end-4 flex items-center text-heading text-muted">ر.س</span>
         </div>
@@ -194,7 +200,9 @@ export function Distribute({
   return (
     <div className="mt-6">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="amount text-title font-bold">{formatAmount(amount ?? 0)}</p>
+        <p ref={previewHeading} tabIndex={-1} aria-label={`معاينة توزيع ${formatAmount(amount ?? 0)}`} className="amount text-title font-bold outline-none">
+          {formatAmount(amount ?? 0)}
+        </p>
         <button type="button" onClick={() => setStep("amount")} className="text-label font-semibold text-accent">
           تعديل المبلغ
         </button>
@@ -289,7 +297,7 @@ function Row({
     <li className="p-4">
       <div className="flex items-center gap-3">
         <span aria-hidden className={`size-3 shrink-0 rounded-full ${bucketBg(bucket.color)} ${off ? "opacity-40" : ""}`} />
-        <span className={`min-w-0 flex-1 ${off ? "opacity-55" : ""}`}>
+        <span className={`min-w-0 flex-1 ${off ? "dimmed" : ""}`}>
           <span className="block truncate font-medium">{bucket.name}</span>
           <span className="amount block text-label text-muted">
             {bucket.rule_kind === "fixed" ? "ثابت" : formatPercent(bucket.rule_value)}

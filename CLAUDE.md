@@ -91,11 +91,13 @@ signed-out requests to `/login`. Server code protects data with `getClaims()`, n
 
 ```
 app/
-  layout.tsx          html lang="ar" dir="rtl", font, globals
+  layout.tsx          html lang="ar" dir="rtl", font, globals, theme-color, saved-theme script
+  manifest.ts         web app manifest (installable, standalone); icon.svg, apple-icon.png
   globals.css         design tokens (light/dark) + Tailwind theme
   login/              sign-in page + server action (no sign-up)
   (app)/              authenticated shell
-    layout.tsx        bottom tab bar (mobile) / side rail (desktop)
+    layout.tsx        skip link, bottom tab bar (mobile) / side rail (desktop)
+    error.tsx         shown when any screen fails to load its data; offers a retry
     page.tsx          الرئيسية: accounts, pending transfers, last distribution, buckets,
                       upcoming subscriptions, investments summary
     buckets/[id]/     bucket detail: balance, entries, actions.tsx (تسجيل صرف, تعديل الرصيد)
@@ -110,7 +112,8 @@ app/
     more/             المزيد (mobile only: links to السجل and الإعدادات)
     history/          السجل: incomes with their split; snapshot.ts reads incomes.snapshot
     settings/         الإعدادات: page.tsx (server loader), settings.tsx (amounts), accounts.tsx,
-                      buckets.tsx (list + editor), preview.tsx, data.ts (types, queries), use-writes.ts
+                      buckets.tsx (list + editor), preview.tsx, data.ts (types, queries), use-writes.ts,
+                      theme-toggle.tsx (system / light / dark), export-button.tsx (all data as JSON)
 components/           shared UI:
   nav.tsx             5 items on mobile, 6 destinations on desktop
   split-bar.tsx       THE split bar. Reuse it; never re-draw it.
@@ -166,6 +169,23 @@ proxy.ts              Next 16 proxy entry
   no advice, no ranking: platforms are always listed alphabetically (`groupByPlatform`).
 - **`SplitBar` colours:** bucket 1-8, `"remainder"` (accent) and `"muted"` (money that is away,
   used for "invested" in the available/invested bar). `thin` halves its height.
+- **Installable, not offline.** `app/manifest.ts` + icons make the app installable; there is no
+  service worker and no caching. `/manifest.webmanifest` is excluded from the auth gate in
+  `proxy.ts` because browsers fetch it without cookies. Icons are rendered from `app/icon.svg`.
+- **Theme:** system by default. A forced choice is `data-theme` on `<html>`, saved in
+  `localStorage` ("theme") on that device, applied before first paint by the inline script in
+  `app/layout.tsx`.
+- **Accessibility rules:** every control has a visible label or `aria-label`; keyboard focus is
+  always visible (`:focus-visible` in the base layer); icons are `aria-hidden`; a quiet row uses
+  the `.dimmed` class (muted text), never opacity, so it still passes AA; when a step changes,
+  focus moves to the new step's heading.
+- **Motion:** the split bar and reordering check `prefers-reduced-motion` and then change with
+  no animation; CSS transitions are cut by the media query in `globals.css`.
+- **Loading and errors:** every server loader sits in `<Suspense>` with a loading line and under
+  `app/(app)/error.tsx`; every client write shows an Arabic message on failure and says whether
+  anything was saved. A distribution is one database function, so a failed confirm writes nothing.
+- **Security headers** are set in `next.config.ts` (from the Next.js PWA guide, with
+  `X-Frame-Options: SAMEORIGIN` instead of `DENY`).
 - **Empty states:** every screen has one, and it names the single next action with a button.
 - **Switches** are `<input type="checkbox" role="switch" class="switch">`.
 - **Warning colour** is the `danger` token, for both blocking errors and soft warnings.
@@ -283,13 +303,15 @@ Screens, in rough order. None are built yet; every tab is a placeholder.
    empty SLOTs, filled by items 4 and 5.
 4. ~~**الاشتراكات**~~ — done (phase 6).
 5. ~~**الاستثمار**~~ — done (phase 7).
-7. Manual light/dark toggle, `motion` for the split bar, deploy to Vercel.
+7. ~~Manual light/dark toggle~~ and ~~`motion` for the split bar~~ — done. Deploy to Vercel: not done.
 
 ## Version 2 backlog
 
 Deliberately left out of version 1:
 - **Push notifications** for subscriptions due soon or overdue (and, later, investments past
   their expected return date). Version 1 only shows them in the app.
+- **Offline use** (service worker, cached screens). Version 1 is installable but needs the network.
+- **Importing** a JSON export back into the app. Version 1 only exports.
 
 ## Current status
 
@@ -484,6 +506,42 @@ overdue) and their `invest` / `return` entries on the
 الاستثمار bucket. From the app these are permanent. To wipe ALL test money data the owner runs
 in the SQL Editor: `delete from entries; delete from investments; delete from incomes;`
 
-All backlog screens of version 1 are now built. Remaining for version 1: manual light/dark
-toggle, `motion` beyond the split bar and reorder, deploy to Vercel, and the unverified items
-listed under each phase above.
+**Phase 8 (polish) — code complete on `phase-8-polish`, not merged yet.**
+
+Done and verified:
+- **Installable:** `/manifest.webmanifest` serves signed-out (200, `application/manifest+json`,
+  standalone, Arabic, RTL), icons 192 / 512 / maskable and the 180 apple icon load, and the page
+  head carries the manifest link, theme-color for light and dark, and the apple web-app tags.
+  Security headers are present.
+- **Theme toggle** (live): light and dark each change the background and the browser chrome
+  colour, the choice survives a reload with no flash script error, and "حسب الجهاز" clears it.
+- **Responsive** (live, signed in, real data): الرئيسية, الاستثمار, توزيع, الاشتراكات, السجل
+  (collapsed and expanded), الإعدادات, المزيد, a bucket page and a transfers checklist, each at
+  375, 768 and 1440px: no horizontal scroll anywhere; bar at 375, side rail at 768 and 1440.
+- **Export** (live): one JSON file `qisma-<date>.json` with settings 1, accounts 2, buckets 7,
+  incomes 1, entries 15, subscriptions 3, investments 3. The file save itself was intercepted in
+  the test, so nothing was written to disk.
+- **Failed confirm** (live): with the network cut for the confirm call only, the preview shows
+  "تعذّر تأكيد التوزيع. لم يُسجَّل شيء", stays on the preview with the button usable again, and
+  السجل still shows exactly one income.
+- **Keyboard and labels** (live): step 1 is a form (Enter continues), focus then lands on the
+  preview heading, all 28 controls of step 2 are natively focusable with a name; on الرئيسية,
+  الإعدادات, الاشتراكات and الاستثمار every control has a name, there is one h1, one main, a
+  labelled nav, no duplicate ids.
+- **Lighthouse 13.6, mobile, production build, `/login`: performance 100, accessibility 100,
+  best practices 100** (FCP 0.8 s, LCP 0.8 s, TBT 10 ms, CLS 0).
+- `npm test`: 34 passing. Lint and build clean.
+
+Not verified:
+- **Lighthouse on the signed-in screens.** It needs a session and the owner's password is never
+  given to Claude; only `/login` was measured. The owner can run it from Chrome DevTools.
+- **Installing the app** on a real phone or desktop (needs HTTPS, so after the Vercel deploy).
+- **Reduced motion** was implemented but not observed with the system setting turned on.
+- **A full keyboard-only run** with real key presses (Tab order was inspected, not driven), and
+  a screen reader pass.
+- `app/(app)/error.tsx` rendering (no load failure was provoked), and the retry after a failed
+  confirm succeeding with the same id.
+- The theme does not update live in OTHER open tabs; they follow on their next load.
+
+All backlog screens of version 1 are built. Remaining for version 1: deploy to Vercel, then
+the install check, and the unverified items listed under each phase above.
