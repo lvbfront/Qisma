@@ -81,7 +81,7 @@ it (manual toggle comes later).
   uses only the **publishable key** and Row Level Security. No secret key, no DB password, ever.
 - **motion** — UI animation only.
 - **Vitest** — unit tests for pure logic (money, allocation).
-- **Vercel** — deploy target.
+- **CranL** (GitHub-connected PaaS, Riyadh region) — deploy target. Vercel is the fallback.
 
 Next 16 note: the request interceptor file is `proxy.ts` (was `middleware.ts`). It
 refreshes the Supabase session with `supabase.auth.getClaims()` and redirects
@@ -290,8 +290,36 @@ npm run lint     # eslint
 npm run build    # production build
 ```
 
-Deploy: import the repo in Vercel, set `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in project env vars; pushes to `main` deploy.
+```
+npm start        # production server; listens on $PORT (default 3000) on all interfaces
+```
+
+## Deploy (CranL)
+
+What CranL's docs say (read 16 Nov 2026: docs.cranl.com, app.cranl.com/llms-full.txt, cranl.com,
+and railpack.com for the builder):
+- It builds from a GitHub repo with **Railpack (auto-detect)** or a **Dockerfile**, runs the
+  result as a service on a **Port** you set, and gives every app `https://<name>-<id>.cranl.net`
+  with HTTPS. Pushes to the app's branch redeploy. Next.js is in its "zero-config builds" list.
+- Railpack starts the app with the `start` script in `package.json` and picks Node from
+  `engines.node`.
+- Regions include `riyadh-1` and `jeddah-1`; the Saudi regions need the **Pro** plan or above.
+- **Not stated in the docs:** whether Environment-tab variables are available during the build,
+  whether a `PORT` variable is injected, and anything specific about SSR or `proxy.ts`.
+
+What the repo does about it:
+- Build type: **Railpack**, no Dockerfile (CranL does not require one). Build `npm run build`,
+  start `npm start` (`next start`: a Node server, so SSR and `proxy.ts` work as on any Node host).
+- `engines.node` is `24.x`.
+- `next start` listens on `$PORT` if the host sets it, else 3000. Set CranL's **Port to 3000**.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` must exist at BUILD
+  time. `next.config.ts` fails the production build with a clear message if they are missing,
+  so a host that only provides them at run time produces a failed deploy, never a broken app.
+- If CranL turns out not to pass variables to the build: Vercel is the fallback (import the
+  repo, set the same two variables, deploy).
+
+After the first deploy: set the HTTPS URL as **Site URL** in Supabase → Authentication → URL
+Configuration, and turn off "Allow new users to sign up".
 
 ## Backlog
 
@@ -312,6 +340,17 @@ Deliberately left out of version 1:
   their expected return date). Version 1 only shows them in the app.
 - **Offline use** (service worker, cached screens). Version 1 is installable but needs the network.
 - **Importing** a JSON export back into the app. Version 1 only exports.
+- **Saved templates** for a distribution: "salary" (the normal rules) and "extra income" (for
+  example rent and installment switched off), chosen on the amount step.
+- **Goals:** a bucket can have a target amount and a target date, with progress and the
+  monthly amount needed to get there.
+- **Due dates and reminders for rent and installment:** fixed buckets get a due day, shown on
+  home like subscriptions (and notified, once push notifications exist).
+- **Transfers between buckets:** move an amount from one bucket to another as a pair of
+  `transfer` entries (the kind already exists in the ledger), with the bank transfer to make
+  if the buckets live in different accounts.
+- **Monthly and yearly reports:** income, what went to each bucket, spends and adjustments,
+  subscription cost, investment results, per month and per year.
 
 ## Current status
 
@@ -543,5 +582,21 @@ Not verified:
   confirm succeeding with the same id.
 - The theme does not update live in OTHER open tabs; they follow on their next load.
 
-All backlog screens of version 1 are built. Remaining for version 1: deploy to Vercel, then
-the install check, and the unverified items listed under each phase above.
+**Phase 8 was merged to `main` together with phase 9.**
+
+**Phase 9 (ship) — repository ready and merged to `main`; NOT deployed yet.**
+
+Done and verified:
+- CranL's docs read; verdict and gaps recorded in "Deploy (CranL)" above.
+- `engines.node` 24.x; `npm start` honours `PORT` (checked with 4010) and binds all interfaces,
+  default 3000; a production build without the two Supabase variables fails with the guard's
+  message, and with them it builds.
+- `README.md` written. Version 2 backlog extended.
+
+Not done (needs the owner's accounts):
+- Creating the CranL app, choosing the region, setting the variables, the first deploy.
+- Whether CranL passes Environment variables to the build is unknown until that first deploy.
+- Supabase: Site URL, turning off sign-ups.
+- A cross-user RLS check on the real project needs a second user; so far it was done on the
+  local Postgres (every migration) and signed-out on the real project.
+- Installing the app from the HTTPS URL, and the unverified items listed under each phase above.
