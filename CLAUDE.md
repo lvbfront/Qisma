@@ -592,11 +592,19 @@ Done and verified:
   default 3000; a production build without the two Supabase variables fails with the guard's
   message, and with them it builds.
 - `README.md` written. Version 2 backlog extended.
+- **Cross-user RLS check on the real project** (owner created a second user and signed in as
+  it): direct reads of all 7 tables through the app's client return 0 rows; the owner's bucket
+  page answers "لم نجد هذا البند" and the owner's distribution "لم نجد هذا التوزيع"; no name,
+  amount or note of the owner appears on any screen.
+- **Empty states**, seen for the first time with that brand-new user: home ("أهلًا بك في قِسمة",
+  set up accounts), settings (two-account offer), history, subscriptions, and investments
+  ("حدّد بند الاستثمار أولًا").
 
 Not done (needs the owner's accounts):
 - Creating the CranL app, choosing the region, setting the variables, the first deploy.
 - Whether CranL passes Environment variables to the build is unknown until that first deploy.
 - Supabase: Site URL, turning off sign-ups.
-- A cross-user RLS check on the real project needs a second user; so far it was done on the
-  local Postgres (every migration) and signed-out on the real project.
+- The second user's attempts to WRITE to the owner's rows were only tested on the local
+  Postgres (every migration), not on the real project.
+- The test user should be deleted in Supabase → Authentication → Users when no longer needed.
 - Installing the app from the HTTPS URL, and the unverified items listed under each phase above.
