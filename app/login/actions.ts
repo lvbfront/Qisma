@@ -18,8 +18,10 @@ export async function signIn(_prev: string | null, formData: FormData): Promise<
   redirect("/");
 }
 
-export async function signOut() {
+/** Returns an Arabic message if signing out failed; otherwise redirects to the login page. */
+export async function signOut(): Promise<string | null> {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) return "تعذّر تسجيل الخروج. ما زلت مسجّل الدخول. حاول مرة أخرى.";
   redirect("/login");
 }

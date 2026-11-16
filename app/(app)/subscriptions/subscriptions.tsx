@@ -10,7 +10,7 @@ import { supabaseBrowser } from "@/utils/supabase/client";
 import { ui } from "../settings/data";
 import { cycleOf, type SubscriptionRow } from "./data";
 
-type BucketOption = { id: string; name: string; active: boolean };
+type BucketOption = { id: string; name: string; active: boolean; accountName: string };
 
 type Draft = {
   id?: string;
@@ -24,17 +24,20 @@ type Draft = {
   paused: boolean;
 };
 
-/** What "تراجع" needs to reverse a payment. */
-type Paid = { subscription: SubscriptionRow; previousDueOn: string; newDueOn: string };
+/** What "تراجع" needs to reverse a payment. bucketId is the bucket that was actually charged. */
+type Paid = { subscription: SubscriptionRow; bucketId: string; previousDueOn: string; newDueOn: string };
 
 export function Subscriptions({
   subscriptions,
   buckets,
+  defaultBucketId,
   today,
 }: {
   /** Nearest payment first. */
   subscriptions: SubscriptionRow[];
   buckets: BucketOption[];
+  /** From settings: pays any subscription that has no bucket of its own. May be null. */
+  defaultBucketId: string | null;
   /** Today's date in Riyadh, "YYYY-MM-DD". */
   today: string;
 }) {
@@ -43,6 +46,8 @@ export function Subscriptions({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [paid, setPaid] = useState<Paid | null>(null);
+  // "تم الدفع" on a subscription with no bucket and no default: the user must choose one first.
+  const [choosing, setChoosing] = useState<{ subscription: SubscriptionRow; bucketId: string; asDefault: boolean } | null>(null);
   // One payment id per subscription and due date: paying the same instalment twice is rejected.
   const paymentIds = useRef(new Map<string, string>());
   const undoId = useRef<string | null>(null);
@@ -51,6 +56,11 @@ export function Subscriptions({
   const pausedOnes = subscriptions.filter((s) => s.paused);
   const total = totals(subscriptions.map((s) => ({ amount: s.amount, cycle: cycleOf(s), paused: s.paused })));
   const original = subscriptions.find((s) => s.id === draft?.id);
+
+  const bucketById = new Map(buckets.map((b) => [b.id, b]));
+  /** The bucket a payment comes out of: the subscription's own, otherwise the default. */
+  const payingBucket = (ownBucketId: string | null | undefined) => bucketById.get(ownBucketId || defaultBucketId || "");
+  const describe = (b: BucketOption) => `بند «${b.name}»${b.accountName ? ` في حساب «${b.accountName}»` : ""}`;
 
   const openNew = () => {
     setFailure(null);
@@ -111,6 +121,12 @@ export function Subscriptions({
   }
 
   async function pay(s: SubscriptionRow) {
+    const bucket = payingBucket(s.bucket_id);
+    // Every payment comes out of a bucket. None set: ask, and change nothing yet.
+    if (!bucket) {
+      setFailure(null);
+      return setChoosing({ subscription: s, bucketId: "", asDefault: false });
+    }
     const key = `${s.id}:${s.next_due_on}`;
     const id = paymentIds.current.get(key) ?? crypto.randomUUID();
     paymentIds.current.set(key, id);
@@ -123,12 +139,44 @@ export function Subscriptions({
     });
     setBusy(false);
     if (error) {
+      // QS001: the database found no bucket to pay from (it changed since this page loaded).
+      if (error.code === "QS001") return setChoosing({ subscription: s, bucketId: "", asDefault: false });
       // 23505: this payment id is already recorded, so the earlier tap went through.
-      if (error.code !== "23505") setFailure(`تعذّر تسجيل دفع ${s.name}. لم يتغيّر شيء.`);
+      if (error.code !== "23505") setFailure(`تعذّر تسجيل دفع ${s.name}. لم يُخصم شيء ولم يتغيّر الموعد.`);
       return router.refresh();
     }
     undoId.current = null;
-    setPaid({ subscription: s, previousDueOn: s.next_due_on, newDueOn: data as string });
+    setPaid({ subscription: s, bucketId: bucket.id, previousDueOn: s.next_due_on, newDueOn: data as string });
+    router.refresh();
+  }
+
+  /** Saves the chosen bucket (on this subscription, or as the default), then pays. */
+  async function chooseAndPay() {
+    if (!choosing?.bucketId) return;
+    const { subscription: s, bucketId, asDefault } = choosing;
+    setBusy(true);
+    setFailure(null);
+    const supabase = supabaseBrowser();
+    const { error } = asDefault
+      ? await supabase.from("settings").upsert({ default_subscription_bucket_id: bucketId })
+      : await supabase.from("subscriptions").update({ bucket_id: bucketId }).eq("id", s.id);
+    if (error) {
+      setBusy(false);
+      return setFailure("تعذّر حفظ البند. لم يُخصم شيء ولم يتغيّر الموعد.");
+    }
+    const key = `${s.id}:${s.next_due_on}`;
+    const id = paymentIds.current.get(key) ?? crypto.randomUUID();
+    paymentIds.current.set(key, id);
+    const paidResult = await supabase.rpc("pay_subscription", { p_id: id, p_subscription_id: s.id, p_paid_on: today });
+    setBusy(false);
+    if (paidResult.error && paidResult.error.code !== "23505") {
+      setFailure(`حُفظ البند، لكن تعذّر تسجيل دفع ${s.name}. لم يُخصم شيء ولم يتغيّر الموعد. اضغط «تم الدفع» مرة أخرى.`);
+      setChoosing(null);
+      return router.refresh();
+    }
+    setChoosing(null);
+    undoId.current = null;
+    if (!paidResult.error) setPaid({ subscription: s, bucketId, previousDueOn: s.next_due_on, newDueOn: paidResult.data as string });
     router.refresh();
   }
 
@@ -140,10 +188,10 @@ export function Subscriptions({
     const s = p.subscription;
     // ponytail: two statements, not one transaction. The money is corrected first; if moving
     // the date back then fails, the message says so and the date can be fixed in the edit sheet.
-    if (s.bucket_id) {
+    {
       const { error } = await supabase.from("entries").insert({
         id: (undoId.current ??= crypto.randomUUID()),
-        bucket_id: s.bucket_id,
+        bucket_id: p.bucketId,
         kind: "adjustment",
         amount: s.amount,
         note: `تراجع عن دفع ${s.name}`,
@@ -188,6 +236,11 @@ export function Subscriptions({
               ما يعادل {formatAmount(monthlyEquivalent(s.amount, cycle))} شهريًا
             </span>
           )}
+          <span className="mt-1 block truncate text-label text-muted">
+            {payingBucket(s.bucket_id)
+              ? `يُدفع من ${payingBucket(s.bucket_id)!.name}${s.bucket_id ? "" : " (الافتراضي)"}`
+              : "لم يُحدَّد بند للدفع"}
+          </span>
         </button>
         {!s.paused && (
           <button
@@ -224,7 +277,7 @@ export function Subscriptions({
         </button>
       </div>
 
-      {failure && !draft && (
+      {failure && !draft && !choosing && (
         <p role="alert" className="mt-2 text-label text-danger">
           {failure}
         </p>
@@ -255,7 +308,8 @@ export function Subscriptions({
           className="fixed inset-x-4 bottom-24 z-20 mx-auto flex max-w-md items-center gap-3 rounded-card border border-hairline bg-surface p-3 ps-4 shadow-lg md:bottom-6"
         >
           <p className="amount min-w-0 flex-1 text-label">
-            تم دفع {paid.subscription.name}. الموعد القادم: {formatDate(paid.newDueOn)}
+            تم دفع {paid.subscription.name} من {bucketById.get(paid.bucketId) ? describe(bucketById.get(paid.bucketId)!) : "البند"}. الموعد القادم:{" "}
+            {formatDate(paid.newDueOn)}
           </p>
           <button type="button" disabled={busy} onClick={() => undo(paid)} className="shrink-0 px-2 py-2 text-label font-semibold text-accent">
             تراجع
@@ -265,6 +319,73 @@ export function Subscriptions({
           </button>
         </div>
       )}
+
+      <Sheet open={choosing !== null} onClose={() => setChoosing(null)} title="من أي بند يُدفع؟">
+        {choosing && (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              chooseAndPay();
+            }}
+          >
+            <p className="amount text-label text-muted">
+              {choosing.subscription.name} · {formatAmount(choosing.subscription.amount)}. لم يُحدَّد له بند، ولا يوجد بند افتراضي
+              للاشتراكات. كل دفعة تُخصم من بند، فلم يُسجَّل شيء بعد.
+            </p>
+            <label className={ui.label}>
+              البند
+              <select
+                value={choosing.bucketId}
+                required
+                autoFocus
+                onChange={(e) => setChoosing({ ...choosing, bucketId: e.target.value })}
+                className={`${ui.field} mt-1.5`}
+              >
+                <option value="" disabled>
+                  اختر بندًا
+                </option>
+                {buckets
+                  .filter((b) => b.active)
+                  .map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                      {b.accountName ? ` · ${b.accountName}` : ""}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="flex items-center justify-between gap-3 py-1 font-medium">
+              اجعله البند الافتراضي لكل الاشتراكات
+              <input
+                type="checkbox"
+                role="switch"
+                checked={choosing.asDefault}
+                onChange={(e) => setChoosing({ ...choosing, asDefault: e.target.checked })}
+                className="switch"
+              />
+            </label>
+            <p className="-mt-2 text-label text-muted">
+              {choosing.asDefault
+                ? "يُحفظ في الإعدادات ويُستخدم لكل اشتراك بلا بند."
+                : "يُحفظ على هذا الاشتراك فقط."}
+            </p>
+            {buckets.every((b) => !b.active) && (
+              <p role="alert" className="text-label text-danger">
+                لا توجد بنود بعد. أضف بنودك من الإعدادات أولًا.
+              </p>
+            )}
+            {failure && (
+              <p role="alert" className="text-label text-danger">
+                {failure}
+              </p>
+            )}
+            <button disabled={busy || !choosing.bucketId} className={ui.primary}>
+              حفظ ودفع {formatAmount(choosing.subscription.amount)}
+            </button>
+          </form>
+        )}
+      </Sheet>
 
       <Sheet open={draft !== null} onClose={() => setDraft(null)} title={draft?.id ? "تعديل الاشتراك" : "اشتراك جديد"}>
         {draft && (
@@ -344,9 +465,14 @@ export function Subscriptions({
               />
             </label>
             <label className={ui.label}>
-              يُدفع من بند (اختياري)
-              <select value={draft.bucketId} onChange={(e) => setDraft({ ...draft, bucketId: e.target.value })} className={`${ui.field} mt-1.5`}>
-                <option value="">بدون بند</option>
+              يُدفع من بند
+              <select
+                value={draft.bucketId}
+                aria-describedby="pays-from"
+                onChange={(e) => setDraft({ ...draft, bucketId: e.target.value })}
+                className={`${ui.field} mt-1.5`}
+              >
+                <option value="">البند الافتراضي للاشتراكات</option>
                 {buckets
                   .filter((b) => b.active || b.id === draft.bucketId)
                   .map((b) => (
@@ -355,8 +481,13 @@ export function Subscriptions({
                     </option>
                   ))}
               </select>
-              <span className="mt-1 block font-normal text-muted">عند «تم الدفع» يُسجَّل الصرف على هذا البند.</span>
             </label>
+            {/* Never ambiguous: exactly where the money will come from. */}
+            <p id="pays-from" aria-live="polite" className={`-mt-2 text-label ${payingBucket(draft.bucketId) ? "text-muted" : "font-medium text-danger"}`}>
+              {payingBucket(draft.bucketId)
+                ? `عند «تم الدفع» يُخصم المبلغ من ${describe(payingBucket(draft.bucketId)!)}${draft.bucketId ? "." : " (البند الافتراضي)."}`
+                : "لا يوجد بند افتراضي بعد. اختر بندًا هنا، أو سنطلب منك اختياره عند «تم الدفع». لا تُسجَّل أي دفعة بلا بند."}
+            </p>
             <label className={ui.label}>
               ملاحظة (اختياري)
               <input

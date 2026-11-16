@@ -20,6 +20,17 @@ export function Settings({ initial }: { initial: SettingsData }) {
   const [reference, setReference] = useState(asInput(initial.referenceIncome));
   const [floor, setFloor] = useState(asInput(initial.livingFloor));
   const [status, setStatus] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [payStatus, setPayStatus] = useState<{ text: string; bad?: boolean } | null>(null);
+
+  async function saveDefaultBucket(bucketId: string) {
+    setPayStatus(null);
+    const { error } = await supabase()
+      .from("settings")
+      .upsert({ default_subscription_bucket_id: bucketId || null });
+    if (error) return setPayStatus({ text: "تعذّر حفظ البند الافتراضي. لم يتغيّر شيء.", bad: true });
+    setData((d) => ({ ...d, defaultSubscriptionBucketId: bucketId || null }));
+    setPayStatus({ text: "تم الحفظ" });
+  }
 
   // The preview follows what is typed, before it is saved.
   const referenceIncome = asAmount(reference) ?? data.referenceIncome;
@@ -91,6 +102,38 @@ export function Settings({ initial }: { initial: SettingsData }) {
         supabase={supabase}
         reload={reload}
       />
+
+      <section aria-labelledby="pay-title" className="mt-10">
+        <h2 id="pay-title" className="text-heading font-bold">
+          الاشتراكات
+        </h2>
+        <div className={`${ui.card} mt-4`}>
+          <label className={ui.label}>
+            بند الدفع الافتراضي للاشتراكات
+            <select
+              value={data.defaultSubscriptionBucketId ?? ""}
+              disabled={data.buckets.length === 0}
+              onChange={(e) => saveDefaultBucket(e.target.value)}
+              className={`${ui.field} mt-1.5`}
+            >
+              <option value="">بدون (سنسألك عند كل دفع)</option>
+              {data.buckets
+                .filter((b) => b.active || b.id === data.defaultSubscriptionBucketId)
+                .map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+            </select>
+            <span className="mt-1 block font-normal text-muted">
+              أي اشتراك لم تحدّد له بندًا يُخصم من هذا البند عند «تم الدفع». كل دفعة تُخصم من بند.
+            </span>
+          </label>
+          <p role={payStatus?.bad ? "alert" : "status"} className={`mt-1 min-h-5 text-label ${payStatus?.bad ? "text-danger" : "text-muted"}`}>
+            {payStatus?.text}
+          </p>
+        </div>
+      </section>
     </>
   );
 }

@@ -1,10 +1,10 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { signOut } from "@/app/login/actions";
 import { createClient } from "@/utils/supabase/server";
 import { loadSettings, ui } from "./data";
 import { ExportButton } from "./export-button";
 import { Settings } from "./settings";
+import { SignOut } from "./sign-out";
 import { ThemeToggle } from "./theme-toggle";
 
 export default function Page() {
@@ -24,11 +24,7 @@ export default function Page() {
           <ExportButton />
         </div>
       </section>
-      <form action={signOut} className="mt-8">
-        <button className="rounded-control border border-hairline bg-surface px-4 py-2.5 text-label font-medium text-danger">
-          تسجيل الخروج
-        </button>
-      </form>
+      <SignOut />
     </>
   );
 }

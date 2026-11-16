@@ -41,12 +41,14 @@ export type SettingsData = {
   accounts: Account[];
   buckets: Bucket[];
   subscriptions: LinkedSubscription[];
+  /** The bucket a subscription with no bucket of its own is paid from. */
+  defaultSubscriptionBucketId: string | null;
 };
 
 /** Everything the settings screen shows. Works with the server or the browser client. */
 export async function loadSettings(supabase: SupabaseClient): Promise<SettingsData> {
   const [settings, accounts, buckets, subscriptions] = await Promise.all([
-    supabase.from("settings").select("reference_income, living_floor").maybeSingle(),
+    supabase.from("settings").select("reference_income, living_floor, default_subscription_bucket_id").maybeSingle(),
     supabase.from("accounts").select("id, name, kind, sort_order, receives_income").order("sort_order").order("created_at"),
     supabase
       .from("buckets")
@@ -63,6 +65,7 @@ export async function loadSettings(supabase: SupabaseClient): Promise<SettingsDa
     accounts: accounts.data as Account[],
     buckets: buckets.data as Bucket[],
     subscriptions: subscriptions.data as LinkedSubscription[],
+    defaultSubscriptionBucketId: settings.data?.default_subscription_bucket_id ?? null,
   };
 }
 

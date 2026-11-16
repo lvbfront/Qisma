@@ -18,10 +18,21 @@ export default function Page() {
 async function Loader() {
   await connection();
   const supabase = await createClient();
-  const [subscriptions, buckets] = await Promise.all([
+  const [subscriptions, buckets, accounts, settings] = await Promise.all([
     loadSubscriptions(supabase),
-    supabase.from("buckets").select("id, name, active").order("priority").order("created_at"),
+    supabase.from("buckets").select("id, name, active, account_id").order("priority").order("created_at"),
+    supabase.from("accounts").select("id, name"),
+    supabase.from("settings").select("default_subscription_bucket_id").maybeSingle(),
   ]);
-  if (buckets.error) throw new Error(buckets.error.message);
-  return <Subscriptions subscriptions={subscriptions} buckets={buckets.data} today={todayInRiyadh()} />;
+  const error = buckets.error ?? accounts.error ?? settings.error;
+  if (error) throw new Error(error.message);
+  const accountName = new Map((accounts.data ?? []).map((a) => [a.id, a.name]));
+  return (
+    <Subscriptions
+      subscriptions={subscriptions}
+      buckets={(buckets.data ?? []).map((b) => ({ id: b.id, name: b.name, active: b.active, accountName: accountName.get(b.account_id) ?? "" }))}
+      defaultBucketId={settings.data?.default_subscription_bucket_id ?? null}
+      today={todayInRiyadh()}
+    />
+  );
 }
