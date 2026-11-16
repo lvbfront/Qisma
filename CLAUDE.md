@@ -100,7 +100,9 @@ app/
     error.tsx         shown when any screen fails to load its data; offers a retry
     page.tsx          الرئيسية: accounts, pending transfers, last distribution, buckets,
                       upcoming subscriptions, investments summary
-    buckets/[id]/     bucket detail: balance, entries, actions.tsx (تسجيل صرف, تعديل الرصيد)
+    buckets/[id]/     bucket detail: balance, entries, actions.tsx (تسجيل صرف, تحويل إلى بند آخر,
+                      تعديل الرصيد)
+    bank-transfer-tick.tsx  one pending bank transfer on home, with its tick
     investments/      الاستثمار: page.tsx (server loader), investments.tsx (figures, bar, open
                       positions by platform, new / receive / close sheets, closed list),
                       data.ts (loader for investment_summary and investment_positions)
@@ -121,7 +123,7 @@ components/           shared UI:
   sheet.tsx           modal on native <dialog>: bottom sheet on mobile, card on desktop
   sortable.tsx        drag-to-reorder list (handle, or arrow keys on the handle)
 lib/                  pure domain logic + tests, no React, no Supabase:
-                      money.ts, dates.ts, allocate.ts, subscriptions.ts, investments.ts
+                      money.ts, dates.ts, allocate.ts, subscriptions.ts, investments.ts, transfers.ts
 utils/supabase/       client.ts, server.ts, proxy.ts (session refresh)
 supabase/migrations/  SQL migrations, applied in filename order
 proxy.ts              Next 16 proxy entry
@@ -239,6 +241,7 @@ signed-in users only; signed-out callers have no access at all).
   | `open_investment` | investment + `invest` entry (negative) on the investment bucket; refuses more than the available balance | the investment id |
   | `record_investment_return` | `return` entry (positive), linked to the investment; several per investment | the entry id |
   | `close_investment` | fixes `result` = total returned - invested (a loss is fine) | none needed: closing twice is rejected |
+  | `transfer_between_buckets` | moves money between two buckets: two linked `transfer` entries sharing one `transfer_id` (minus on the source, plus on the destination), so the total never changes. Refuses more than the source balance (`QT001`) | the source entry id (= `transfer_id`) |
   | `reopen_investment` | undoes a close made by mistake: back to `open`, `result` and `closed_on` cleared; entries untouched | none needed: only a closed one can be reopened |
 
 - `incomes.snapshot` stores the exact lines and rules used, so history survives rule changes:
@@ -249,6 +252,17 @@ signed-in users only; signed-out callers have no access at all).
   account has `transfer_done = false` (`loadPending`).
 - `buckets.color` is 1..8 and maps to the `bucket-N` design tokens.
 - `buckets.is_investment`: at most one active per user, never the remainder bucket.
+- **Three ways to change a bucket by hand, and they mean different things:**
+  a **spend** (money leaves for good), a **transfer** to another bucket (money moves; the total
+  of all money is unchanged), and an **adjustment** (a correction to match the real bank
+  balance; the total goes up or down by the difference, and the UI says by how much before
+  saving). Never use an adjustment to move money.
+- **Transfers between buckets in different accounts** leave the destination entry with
+  `transfer_done = false`: the user still has to make that bank transfer, so it appears under
+  "تحويلات لم تكتمل" on home (`loadPendingBucketTransfers`) until ticked. Same-account transfers
+  are written as done.
+- The client can insert only plain `spend` and `adjustment` entries. `transfer` entries, like
+  `allocation`, `invest`, `return` and subscription payments, come only from their function.
 - **Every subscription payment comes out of a bucket.** The bucket is the subscription's own
   `bucket_id`, otherwise `settings.default_subscription_bucket_id` ("بند الدفع الافتراضي
   للاشتراكات", set in settings; cleared automatically if that bucket is deleted). With neither,
@@ -367,9 +381,6 @@ Deliberately left out of version 1:
   monthly amount needed to get there.
 - **Due dates and reminders for rent and installment:** fixed buckets get a due day, shown on
   home like subscriptions (and notified, once push notifications exist).
-- **Transfers between buckets:** move an amount from one bucket to another as a pair of
-  `transfer` entries (the kind already exists in the ledger), with the bank transfer to make
-  if the buckets live in different accounts.
 - **Monthly and yearly reports:** income, what went to each bucket, spends and adjustments,
   subscription cost, investment results, per month and per year.
 
@@ -676,3 +687,33 @@ may now hold real data, so no test rows were created there; the owner tests on t
 The past payments that deducted nothing are not corrected by this fix: each such subscription
 simply had its date advanced. If a real payment was made then, record it with "تسجيل صرف" on the
 right bucket.
+
+**Feature (17 Nov 2026): move money between buckets. Merged to `main` and pushed.**
+
+Built:
+- Migration `20261117100000_bucket_transfers.sql`: `entries.transfer_id`, the tightened insert
+  policy, and `transfer_between_buckets`. **Applied to the real project** by the owner; from
+  outside, the new column answers "permission denied" (a made-up column answers "does not
+  exist") and the new function answers "permission denied" (a made-up function answers "could
+  not find"). The owner did not report the check query's result, so the policy change on the
+  real project is confirmed only by "the migration ran successfully".
+- Bucket detail: "تحويل إلى بند آخر" (destination, amount, note). It blocks more than the
+  balance, and before saving says either "هذا ينقل X ر.س من <حساب> إلى <حساب>" with a note that
+  the bank transfer is the user's to make, or that both buckets are in the same account.
+- "تعديل الرصيد" now reads as a correction to match the bank balance and says how much the
+  total of all money will go up or down.
+- Entry lists show "تحويل إلى <بند>" / "تحويل من <بند>" on both sides.
+- Home: cross-account transfers appear under "تحويلات لم تكتمل" with a tick.
+
+Verified:
+- `lib/transfers.ts` unit tests, including 2,000 random transfers that leave the total
+  unchanged and never overdraw a bucket. `npm test`: 40 passing. Lint and build clean.
+- On the local Postgres (all five migrations): after a same-account and a cross-account
+  transfer the total across buckets and across accounts is identical (691,000 before and
+  after) while the individual balances move; the cross-account destination leg is pending and
+  the same-account one is done; over-balance (`QT001`), same bucket, zero, a repeated id and an
+  unknown destination are refused and change nothing; a lone `transfer` entry cannot be
+  inserted directly; another user and a signed-out caller are refused.
+
+NOT verified: **the new screens were not clicked through in a browser** (the owner chose to
+test on the live URL), and whether the live site is serving this build.
