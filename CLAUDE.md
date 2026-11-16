@@ -281,7 +281,7 @@ Screens, in rough order. None are built yet; every tab is a placeholder.
 3. ~~**الرئيسية**~~, bucket detail and ~~**السجل**~~ — done (phase 5). Home still has two
    empty SLOTs, filled by items 4 and 5.
 4. ~~**الاشتراكات**~~ — done (phase 6).
-5. ~~**الاستثمار**~~ — built (phase 7); live test not finished, see Current status.
+5. ~~**الاستثمار**~~ — done (phase 7).
 7. Manual light/dark toggle, `motion` for the split bar, deploy to Vercel.
 
 ## Version 2 backlog
@@ -438,30 +438,42 @@ Test data added to the real project: three subscriptions ("اشتراك شهري
 "اشتراك فصلي"; deletable from their edit sheets) and, in the ledger, a 30 spend and a +30
 adjustment on القسط from the pay/undo test.
 
-**Phase 7 (الاستثمار) — code written on `phase-7-investments`; live test NOT finished, not merged.**
+**Phase 7 (الاستثمار) — code complete on `phase-7-investments`, not merged yet.**
 
-Built:
-- `/investments`: three figures from `investment_summary` (المتاح, مستثمر حالياً, الربح المحقق),
-  a thin available/invested bar, open investments grouped by platform with each group's
-  outstanding subtotal, overdue tag, "استثمار جديد" (platform suggestions from platforms already
-  used, blocks amounts above المتاح), "استلمت مبلغ" followed by "هل انتهى هذا الاستثمار؟",
-  "إغلاق" with a confirmation, and a collapsed list of closed investments (invested, returned,
-  result in SAR and percent, duration).
-- Empty state when no bucket is flagged as the investment bucket, linking to settings.
-- Home: the investments summary card with the three figures and the nearest expected return.
+Done and verified (375px frame, signed in, real Supabase project, example values):
+- Three figures from `investment_summary` and the thin available/invested bar (accent / muted).
+- "استثمار جديد" (first real calls of `open_investment`): 2,000 is blocked with "المتاح 1,500 ر.س
+  فقط"; 500 on "منصة أ" with an expected date and profit, 300 on "منصة ب" with a past date,
+  100 on "منصة أ". Platform suggestions list the platforms already used. A double tap recorded once.
+- Open investments grouped by platform, alphabetical, each with its outstanding subtotal; the
+  past-date one shows "متأخر 3 يوم" and the "متأخر" tag.
+- "استلمت مبلغ" 540 on the 500 one (`record_investment_return`), then "هل انتهى هذا الاستثمار؟"
+  showing 500 / 540 / +40, "نعم، أغلقه" (`close_investment`): **profit +40 (+8%)**.
+- "إغلاق" on the 100 one with nothing returned: the confirmation says the whole amount becomes
+  a loss; result -100 (-100%).
+- Figures after all of that: المتاح 1,140, مستثمر حالياً 300, الربح المحقق -60. The closed list is
+  collapsed by default and shows invested, returned, result in SAR and percent, and duration.
+- Home: the "ملخص الاستثمار" card shows the same three figures and "أقرب عودة متوقعة: 13 نوفمبر
+  2026 · متأخر 3 يوم"; حساب الادخار's balance follows (1,640).
+- Signs measured in the page: "+" and "-" sit before the digits in RTL text.
+- `npm test`: 34 passing. Lint and build clean. No horizontal scroll at 375px.
 
-Verified:
-- `npm test`: 34 passing (includes platform grouping and the 500 -> 540 -> +40 example).
-  Lint and build clean.
-- Live, signed in, 375px: the screen loads with المتاح 1,500 ر.س, zeros for the other two, the
-  bar's text alternative, and the "no open investments" empty state.
+Not verified:
+- The empty state for "no investment bucket" (the test data has one), and the home card being
+  hidden in that case.
+- "لا، ما زال قائمًا" followed by a second return on the same investment (several returns per
+  investment were checked in the database on the local Postgres, not through this screen).
+- A failed call (network error) and its retry.
+- 1440px and light theme.
 
-NOT verified (the browser automation connection dropped during the first write test):
-- Every write path: `open_investment`, `record_investment_return`, `close_investment` from the
-  UI, the above-المتاح block, the "finished?" step, the write-off, the closed list, grouping
-  with real rows, the overdue tag, the home card.
-- The interrupted test may have created up to three test investments ("تجربة أولى" 500 on
-  "منصة أ", "تجربة متأخرة" 300 on "منصة ب", "تجربة خسارة" 100 on "منصة أ"). Unknown which, if any.
-- The empty state for "no investment bucket", 1440px and light theme.
+Not built (not asked for): editing an investment's platform, title or expectation after it is
+opened; reopening a closed investment.
 
-Next: finish the live test of phase 7, then merge.
+Test data added to the real project: three investments ("تجربة أولى" closed +40, "تجربة خسارة"
+closed -100, "تجربة متأخرة" open and overdue) and their `invest` / `return` entries on the
+الاستثمار bucket. From the app these are permanent. To wipe ALL test money data the owner runs
+in the SQL Editor: `delete from entries; delete from investments; delete from incomes;`
+
+All backlog screens of version 1 are now built. Remaining for version 1: manual light/dark
+toggle, `motion` beyond the split bar and reorder, deploy to Vercel, and the unverified items
+listed under each phase above.
