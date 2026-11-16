@@ -89,6 +89,22 @@ You need Node.js 24 and a Supabase project.
    npm run dev
    ```
 
+### Start and stop
+
+Start the local app (from the project folder):
+
+```
+npm run dev
+```
+
+Stop it (from any terminal; or press Ctrl+C in the terminal where it is running):
+
+```
+kill $(lsof -ti tcp:3001)
+```
+
+If the stop command prints a usage message, nothing was running on port 3001.
+
 For a production run, `npm run build` then `npm start`. The server listens on `PORT`
 (default 3000). The two variables above must be set when **building**, not only when running;
 the build stops with a clear message if they are missing.

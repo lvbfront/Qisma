@@ -296,6 +296,17 @@ npm start        # production server; listens on $PORT (default 3000) on all int
 
 ## Deploy (CranL)
 
+**Live: https://qisma-app-jdq8dq.cranl.net/** (deployed 16 Nov 2026, Railpack build of `main`;
+a push to `main` redeploys).
+
+Confirmed by the first deploy:
+- **CranL does provide Environment-tab variables at build time.** The two `NEXT_PUBLIC_SUPABASE_*`
+  variables were set before the first build and the guarded build succeeded. Set them BEFORE
+  building; a change needs a Rebuild, not a Reload.
+- **Port setting: 3000** (the value given in the setup steps; `next start` listens on 3000
+  unless the host sets `PORT`). If the dashboard shows a different value, correct this line.
+- Right after a deploy the URL can answer "Bad Gateway" for a short while until the server is up.
+
 What CranL's docs say (read 16 Nov 2026: docs.cranl.com, app.cranl.com/llms-full.txt, cranl.com,
 and railpack.com for the builder):
 - It builds from a GitHub repo with **Railpack (auto-detect)** or a **Dockerfile**, runs the
@@ -304,8 +315,9 @@ and railpack.com for the builder):
 - Railpack starts the app with the `start` script in `package.json` and picks Node from
   `engines.node`.
 - Regions include `riyadh-1` and `jeddah-1`; the Saudi regions need the **Pro** plan or above.
-- **Not stated in the docs:** whether Environment-tab variables are available during the build,
-  whether a `PORT` variable is injected, and anything specific about SSR or `proxy.ts`.
+- **Not stated in the docs:** whether Environment-tab variables are available during the build
+  (they are: see above), whether a `PORT` variable is injected (still unknown), and anything
+  specific about SSR or `proxy.ts` (both work on the live app: gated routes redirect).
 
 What the repo does about it:
 - Build type: **Railpack**, no Dockerfile (CranL does not require one). Build `npm run build`,
@@ -315,8 +327,7 @@ What the repo does about it:
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` must exist at BUILD
   time. `next.config.ts` fails the production build with a clear message if they are missing,
   so a host that only provides them at run time produces a failed deploy, never a broken app.
-- If CranL turns out not to pass variables to the build: Vercel is the fallback (import the
-  repo, set the same two variables, deploy).
+- Vercel remains the fallback host (import the repo, set the same two variables, deploy).
 
 After the first deploy: set the HTTPS URL as **Site URL** in Supabase → Authentication → URL
 Configuration, and turn off "Allow new users to sign up".
@@ -584,7 +595,7 @@ Not verified:
 
 **Phase 8 was merged to `main` together with phase 9.**
 
-**Phase 9 (ship) — repository ready and merged to `main`; NOT deployed yet.**
+**Phase 9 (ship) — deployed on CranL and merged to `main`.**
 
 Done and verified:
 - CranL's docs read; verdict and gaps recorded in "Deploy (CranL)" above.
@@ -600,10 +611,22 @@ Done and verified:
   set up accounts), settings (two-account offer), history, subscriptions, and investments
   ("حدّد بند الاستثمار أولًا").
 
-Not done (needs the owner's accounts):
-- Creating the CranL app, choosing the region, setting the variables, the first deploy.
-- Whether CranL passes Environment variables to the build is unknown until that first deploy.
-- Supabase: Site URL, turning off sign-ups.
+- **Signed-out checks of the live URL:** all nine app routes answer 307 to
+  `https://qisma-app-jdq8dq.cranl.net/login` (the public host, not an internal one); `/login` is
+  200 over HTTP/2 with a valid certificate, Arabic RTL, no sign-up link; plain `http://`
+  redirects to `https://`; the security headers are present; the manifest (standalone) and all
+  four icons load without a session; a gated route's redirect carries no cache headers.
+- **Lighthouse 13.6, mobile, live `/login`: performance 100, accessibility 100, best practices
+  100** (FCP 1.3 s, LCP 1.3 s, TBT 10 ms, CLS 0).
+
+Not verified by Claude on the live site (needs the owner's session):
+- Signing in, every signed-in screen, and installing the app from the HTTPS URL.
+- Which region and plan the app runs on, and the Port value in the dashboard.
+
+Still for the owner to do in Supabase:
+- Site URL = the live URL (Authentication → URL Configuration).
+- Turn off "Allow new users to sign up".
+- Remove the test data and the test user (a one-off SQL script was given in chat, not kept in the repo).
 - The second user's attempts to WRITE to the owner's rows were only tested on the local
   Postgres (every migration), not on the real project.
 - The test user should be deleted in Supabase → Authentication → Users when no longer needed.
