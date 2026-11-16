@@ -159,7 +159,11 @@ proxy.ts              Next 16 proxy entry
   the balance records an `adjustment` entry for the difference. Each form generates its entry id
   once, so a double submit is rejected by the primary key.
 - **Undo never deletes.** Undoing a subscription payment adds an `adjustment` entry for the
-  amount on the linked bucket and moves `next_due_on` back (two statements, marked `ponytail:`).
+  amount on the bucket that was actually charged and moves `next_due_on` back (two statements,
+  marked `ponytail:`).
+- **No save fails silently.** Every write (insert, update, upsert, delete, rpc, sign-in,
+  sign-out, even saving the theme on the device) checks its result and shows an Arabic message
+  that says what was and was not saved. When adding a write, add its message.
 - **Subscription `billing_day`:** on save it is the day of the picked date, unless the date was
   not touched, in which case the stored day is kept (a "31st" subscription sitting on 28 Feb
   stays a 31st).
@@ -231,7 +235,7 @@ signed-in users only; signed-out callers have no access at all).
   | Function | Does | App-generated id |
   |---|---|---|
   | `confirm_distribution` | income + all its `allocation` entries; must sum to the amount | the income id |
-  | `pay_subscription` | `spend` entry on the linked bucket (if any) + advances `next_due_on` one cycle | the entry id, also kept in `last_payment_id` |
+  | `pay_subscription` | `spend` entry on the subscription's bucket, else on the default payment bucket, + advances `next_due_on` one cycle. With neither it raises `QS001` and changes nothing | the entry id, also kept in `last_payment_id` |
   | `open_investment` | investment + `invest` entry (negative) on the investment bucket; refuses more than the available balance | the investment id |
   | `record_investment_return` | `return` entry (positive), linked to the investment; several per investment | the entry id |
   | `close_investment` | fixes `result` = total returned - invested (a loss is fine) | none needed: closing twice is rejected |
@@ -245,6 +249,12 @@ signed-in users only; signed-out callers have no access at all).
   account has `transfer_done = false` (`loadPending`).
 - `buckets.color` is 1..8 and maps to the `bucket-N` design tokens.
 - `buckets.is_investment`: at most one active per user, never the remainder bucket.
+- **Every subscription payment comes out of a bucket.** The bucket is the subscription's own
+  `bucket_id`, otherwise `settings.default_subscription_bucket_id` ("بند الدفع الافتراضي
+  للاشتراكات", set in settings; cleared automatically if that bucket is deleted). With neither,
+  "تم الدفع" opens a sheet to choose one (saved on the subscription, or as the default) and only
+  then pays. The database enforces this too (`QS001`), so the date can never advance without a
+  deduction.
 - **Subscriptions:** cycle = `cycle_count` x `cycle_unit` (month | year). `billing_day` (1-31)
   is the original day of the month; `next_due_on` is always that day or the last day of a
   shorter month (a check constraint enforces it), so dates never drift. When the app changes
@@ -631,3 +641,38 @@ Still for the owner to do in Supabase:
   Postgres (every migration), not on the real project.
 - The test user should be deleted in Supabase → Authentication → Users when no longer needed.
 - Installing the app from the HTTPS URL, and the unverified items listed under each phase above.
+
+**Fix (16 Nov 2026): a subscription with no bucket was "paid" without deducting anything.
+Merged to `main` and deployed.**
+
+Cause: `pay_subscription` only recorded a spend when the subscription had its own bucket, and
+the app let a bucket-less subscription through. Fixed in the database and the app (see
+"Every subscription payment comes out of a bucket" under Database).
+
+Changed:
+- Migration `20261116200000_subscription_default_bucket.sql`: `settings.default_subscription_bucket_id`
+  and a `pay_subscription` that refuses to pay from nowhere. **Applied to the real project** by
+  the owner; from outside, the new column answers "permission denied" (a made-up column answers
+  "does not exist"), and the function still refuses signed-out callers. The owner did not report
+  the result of the check query, so the function body on the real project is not confirmed
+  beyond "the migration ran successfully".
+- Settings: "بند الدفع الافتراضي للاشتراكات". Subscriptions: each row and the sheet say which
+  bucket and account the payment comes from; "تم الدفع" with no bucket asks for one first; the
+  toast names the bucket charged; undo refunds that bucket.
+- A failed sign-out and a theme that cannot be saved on the device now show a message; every
+  other write already did (audited: all write calls in `app/`).
+
+Verified:
+- On the local Postgres (all four migrations): paying with no bucket and no default raises
+  `QS001` and leaves the date and the entries unchanged; with a default, the spend lands on the
+  default bucket and the date advances; the subscription's own bucket wins over the default;
+  another user's bucket cannot be set as default; deleting the default bucket clears the
+  setting and keeps the other settings; same payment id twice is rejected; other user and
+  signed-out caller refused; grants unchanged.
+- `npm test` 34 passing, lint and build clean.
+
+NOT verified: **the new screens were not clicked through in a browser.** The owner's project
+may now hold real data, so no test rows were created there; the owner tests on the live URL.
+The past payments that deducted nothing are not corrected by this fix: each such subscription
+simply had its date advanced. If a real payment was made then, record it with "تسجيل صرف" on the
+right bucket.
