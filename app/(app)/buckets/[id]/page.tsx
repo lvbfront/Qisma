@@ -42,7 +42,7 @@ async function BucketDetail({ params }: { params: PageProps<"/buckets/[id]">["pa
         supabase.from("bucket_balances").select("balance").eq("bucket_id", id).maybeSingle(),
         supabase
           .from("entries")
-          .select("id, kind, amount, note, occurred_on")
+          .select("id, kind, amount, note, occurred_on, transfer_id")
           .eq("bucket_id", id)
           .order("occurred_on", { ascending: false })
           .order("created_at", { ascending: false })
@@ -65,9 +65,29 @@ async function BucketDetail({ params }: { params: PageProps<"/buckets/[id]">["pa
 
   const b = bucket.data;
   const current = (balance?.data?.balance as number | undefined) ?? 0;
-  const account = await supabase.from("accounts").select("name").eq("id", b.account_id).maybeSingle();
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
   const list = entries?.data ?? [];
+  const transferIds = [...new Set(list.map((e) => e.transfer_id).filter(Boolean))] as string[];
+  const [accounts, allBuckets, otherLegs] = await Promise.all([
+    supabase.from("accounts").select("id, name"),
+    supabase.from("buckets").select("id, name, active, account_id").order("priority").order("created_at"),
+    // The other leg of each transfer shown here, to name the bucket it came from or went to.
+    transferIds.length > 0
+      ? supabase.from("entries").select("transfer_id, bucket_id").in("transfer_id", transferIds).neq("bucket_id", id)
+      : Promise.resolve({ data: [] as { transfer_id: string; bucket_id: string }[], error: null }),
+  ]);
+  const loadError = accounts.error ?? allBuckets.error ?? otherLegs.error;
+  if (loadError) throw new Error(loadError.message);
+  const accountName = new Map((accounts.data ?? []).map((a) => [a.id, a.name as string]));
+  const bucketName = new Map((allBuckets.data ?? []).map((x) => [x.id, x.name as string]));
+  const otherBucketOf = new Map((otherLegs.data ?? []).map((leg) => [leg.transfer_id, bucketName.get(leg.bucket_id) ?? ""]));
+  const account = { data: { name: accountName.get(b.account_id) } };
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
+  /** "تحويل إلى السفر" / "تحويل من المعيشة"; other kinds keep their plain label. */
+  const kindLabel = (e: { kind: string; amount: number; transfer_id: string | null }) => {
+    const other = e.transfer_id ? otherBucketOf.get(e.transfer_id) : "";
+    if (e.kind === "transfer" && other) return e.amount < 0 ? `تحويل إلى ${other}` : `تحويل من ${other}`;
+    return KIND[e.kind] ?? e.kind;
+  };
 
   return (
     <>
@@ -78,7 +98,17 @@ async function BucketDetail({ params }: { params: PageProps<"/buckets/[id]">["pa
       {account.data?.name && <p className="mt-1 text-label text-muted">في {account.data.name}</p>}
       <p className="amount mt-3 text-display font-bold">{formatAmount(current)}</p>
 
-      <BucketActions bucketId={b.id} bucketName={b.name} balance={current} today={today} />
+      <BucketActions
+        bucketId={b.id}
+        bucketName={b.name}
+        balance={current}
+        accountId={b.account_id}
+        accountName={accountName.get(b.account_id) ?? ""}
+        others={(allBuckets.data ?? [])
+          .filter((x) => x.active && x.id !== b.id)
+          .map((x) => ({ id: x.id, name: x.name, accountId: x.account_id, accountName: accountName.get(x.account_id) ?? "" }))}
+        today={today}
+      />
 
       <h2 className="mt-8 text-heading font-bold">الحركات</h2>
       {list.length === 0 ? (
@@ -94,9 +124,10 @@ async function BucketDetail({ params }: { params: PageProps<"/buckets/[id]">["pa
           {list.map((e) => (
             <li key={e.id} className="flex items-center gap-3 p-4">
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{e.note || KIND[e.kind] || e.kind}</span>
+                {/* A transfer always leads with the other bucket's name; its note goes on the second line. */}
+                <span className="block truncate font-medium">{e.kind === "transfer" ? kindLabel(e) : e.note || kindLabel(e)}</span>
                 <span className="amount block truncate text-label text-muted">
-                  {e.note ? `${KIND[e.kind] ?? e.kind} · ` : ""}
+                  {e.note ? `${e.kind === "transfer" ? e.note : kindLabel(e)} · ` : ""}
                   {formatDate(e.occurred_on)}
                 </span>
               </span>

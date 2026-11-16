@@ -7,7 +7,8 @@ import { addDays, daysBetween, formatDate } from "@/lib/dates";
 import { formatAmount, formatSigned } from "@/lib/money";
 import { dueLabel } from "@/lib/subscriptions";
 import { createClient } from "@/utils/supabase/server";
-import { loadPending } from "./distribute/data";
+import { BankTransferTick } from "./bank-transfer-tick";
+import { loadPending, loadPendingBucketTransfers } from "./distribute/data";
 import { snapshotRows, snapshotSegments } from "./history/snapshot";
 import { ui } from "./settings/data";
 import { todayInRiyadh } from "./subscriptions/data";
@@ -42,7 +43,7 @@ async function Home() {
   await connection();
   const supabase = await createClient();
   const today = todayInRiyadh();
-  const [accounts, accountBalances, buckets, bucketBalances, lastIncome, pending, due, investSummary, nextReturn] = await Promise.all([
+  const [accounts, accountBalances, buckets, bucketBalances, lastIncome, pending, due, investSummary, nextReturn, bankTransfers] = await Promise.all([
     supabase.from("accounts").select("id, name").order("sort_order").order("created_at"),
     supabase.from("account_balances").select("account_id, balance"),
     supabase.from("buckets").select("id, name, color, rule_kind, active, is_investment").order("priority").order("created_at"),
@@ -72,6 +73,7 @@ async function Home() {
       .order("expected_return_on")
       .limit(1)
       .maybeSingle(),
+    loadPendingBucketTransfers(supabase),
   ]);
   const error =
     accounts.error ??
@@ -128,12 +130,18 @@ async function Home() {
       </section>
 
       {/* 2. Pending transfers: only while a checklist is unfinished. */}
-      {pending.length > 0 && (
+      {(pending.length > 0 || bankTransfers.length > 0) && (
         <section aria-labelledby="pending-title" className="mt-6">
           <h2 id="pending-title" className={heading}>
             تحويلات لم تكتمل
           </h2>
           <ul className="mt-3 flex flex-col gap-3">
+            {/* Money moved between buckets in different accounts: the bank transfer is still to be made. */}
+            {bankTransfers.map((t) => (
+              <li key={t.entryId}>
+                <BankTransferTick transfer={t} />
+              </li>
+            ))}
             {pending.map((p) => (
               <li key={p.incomeId}>
                 <Link

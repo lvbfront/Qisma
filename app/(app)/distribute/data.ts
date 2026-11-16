@@ -123,3 +123,55 @@ export async function loadPending(supabase: SupabaseClient): Promise<PendingDist
     };
   });
 }
+
+export type PendingBucketTransfer = {
+  /** The destination entry: ticking it sets transfer_done. */
+  entryId: string;
+  amount: number;
+  occurredOn: string;
+  fromBucket: string;
+  toBucket: string;
+  fromAccount: string;
+  toAccount: string;
+};
+
+/**
+ * Transfers between buckets that live in different accounts and are not ticked yet:
+ * the bank transfer still has to be made by the user.
+ */
+export async function loadPendingBucketTransfers(supabase: SupabaseClient): Promise<PendingBucketTransfer[]> {
+  const open = await supabase
+    .from("entries")
+    .select("id, bucket_id, amount, occurred_on, transfer_id")
+    .eq("kind", "transfer")
+    .eq("transfer_done", false)
+    .gt("amount", 0)
+    .order("occurred_on", { ascending: false });
+  if (open.error) throw new Error(open.error.message);
+  if (open.data.length === 0) return [];
+
+  const [sources, buckets, accounts] = await Promise.all([
+    supabase.from("entries").select("transfer_id, bucket_id").in("transfer_id", open.data.map((e) => e.transfer_id)).lt("amount", 0),
+    supabase.from("buckets").select("id, name, account_id"),
+    supabase.from("accounts").select("id, name"),
+  ]);
+  const error = sources.error ?? buckets.error ?? accounts.error;
+  if (error) throw new Error(error.message);
+
+  const bucket = new Map((buckets.data ?? []).map((b) => [b.id, b]));
+  const account = new Map((accounts.data ?? []).map((a) => [a.id, a.name as string]));
+  const sourceOf = new Map((sources.data ?? []).map((e) => [e.transfer_id, e.bucket_id]));
+  return open.data.map((e) => {
+    const to = bucket.get(e.bucket_id);
+    const from = bucket.get(sourceOf.get(e.transfer_id) ?? "");
+    return {
+      entryId: e.id,
+      amount: e.amount,
+      occurredOn: e.occurred_on,
+      fromBucket: from?.name ?? "",
+      toBucket: to?.name ?? "",
+      fromAccount: account.get(from?.account_id ?? "") ?? "",
+      toAccount: account.get(to?.account_id ?? "") ?? "",
+    };
+  });
+}
